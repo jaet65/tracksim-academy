@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; // Importamos collection y getDocs
 import { onAuthStateChanged } from 'firebase/auth';
-import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown } from 'lucide-react';
+import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User } from 'lucide-react';
+import logo from '../assets/Logo.png'; // Importamos el logo
 
 const StudentEntry = () => {
   const [selectedExamId, setSelectedExamId] = useState('');
@@ -78,9 +79,12 @@ const StudentEntry = () => {
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
         
         {/* Header con Bienvenida */}
+        <div className="flex justify-center mb-6">
+          <img src={logo} alt="Logo de la Academia" className="h-12" />
+        </div>
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-800">
-            Hola, <span className="text-blue-600">{userData?.fullName?.split(" ")[0]}</span>
+            Hola, <span className="text-blue-600">{userData?.fullName?.split(' ')[0] || ''}</span>
           </h1>
           <p className="text-gray-500 mt-2 text-sm">
             Selecciona la evaluación que deseas realizar hoy.
@@ -139,12 +143,20 @@ const StudentEntry = () => {
         </form>
 
         <div className="mt-8 pt-6 border-t border-gray-100">
-          <button 
-            onClick={() => auth.signOut()}
-            className="text-sm text-gray-400 hover:text-red-500 flex items-center justify-center gap-2 w-full transition-colors"
-          >
-            <LogOut size={16} /> Cerrar Sesión
-          </button>
+          <div className="flex items-center justify-center space-x-4">
+            <button 
+              onClick={() => navigate('/editar-perfil')}
+              className="text-sm text-gray-400 hover:text-blue-500 flex items-center justify-center gap-2 transition-colors"
+            >
+              <User size={16} /> Editar Perfil
+            </button>
+            <button 
+              onClick={() => auth.signOut()}
+              className="text-sm text-gray-400 hover:text-red-500 flex items-center justify-center gap-2 transition-colors"
+            >
+              <LogOut size={16} /> Cerrar Sesión
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -5,11 +5,12 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   GoogleAuthProvider, 
-  signInWithPopup, // <--- VOLVEMOS A POPUP
+  signInWithPopup,
   onAuthStateChanged 
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Lock, Mail, Chrome, Loader, AlertCircle } from 'lucide-react';
+import logo from '../assets/Logo.gif'; // Importamos el logo
 
 const ADMIN_EMAILS = ["magraz@corporativomaf.com", "admin@tracksim.com"]; // TU CORREO ADMIN AQUÍ
 
@@ -37,13 +38,25 @@ const Login = () => {
   // 2. LÓGICA DE DIRECCIONAMIENTO
   const handleRedirectLogic = async (user) => {
     try {
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
       // A. Admin
       if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) {
+        // Si el admin no tiene perfil, se lo creamos automáticamente
+        if (!userDoc.exists()) {
+          await setDoc(userDocRef, {
+            fullName: user.displayName || user.email.split('@')[0],
+            email: user.email,
+            isAdmin: true, // Marcamos como administrador
+            createdAt: new Date(),
+          });
+        }
         navigate('/admin');
         return;
       }
+
       // B. Alumno
-      const userDoc = await getDoc(doc(db, "users", user.uid));
       if (userDoc.exists()) {
         navigate('/portal');
       } else {
@@ -104,7 +117,11 @@ const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
+        <div className="flex justify-center mb-6">
+          <img src={logo} alt="TrackSIM Logo" className="h-12" />
+        </div>
+
+        <h2 className="text-2xl font-bold text-center text-gray-800 mb-8">
           {isRegistering ? 'Crear Cuenta' : 'Acceso'}
         </h2>
 

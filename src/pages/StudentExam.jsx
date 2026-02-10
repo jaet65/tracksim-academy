@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
 import { doc, getDoc, addDoc, collection } from 'firebase/firestore';
-import { Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft } from 'lucide-react';
+import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft } from 'lucide-react';
+import { generateConstancia } from '../utils/generateConstancia';
+import { signOut } from 'firebase/auth'; // Importamos signOut
 
 const StudentExam = () => {
   const { id } = useParams(); // Obtenemos el ID del examen desde la URL
@@ -99,14 +101,23 @@ const StudentExam = () => {
         
         // Datos del Alumno (DC-3)
         studentName: studentData.fullName || "Sin Nombre",
+        studentFirstName: studentData.firstName || '',
+        studentPaternalLastName: studentData.paternalLastName || '',
+        studentMaternalLastName: studentData.maternalLastName || '',
         studentCurp: studentData.curp || "N/A",
         studentOccupation: studentData.occupation || "N/A",
         studentCompany: studentData.company || "N/A",
+        studentCompanyRfc: studentData.companyRfc || "N/A", // <-- Guardamos el RFC de la empresa
+        studentEmail: user ? user.email : "N/A", // <-- Guardamos el email del usuario
         studentUid: user ? user.uid : "anon",
         
         // Datos Académicos
         score: finalScore,
         totalQuestions: exam.questions.length,
+        
+        // Guardamos las respuestas para poder regenerar la constancia
+        studentAnswers: answers,
+        examQuestions: exam.questions,
         correctAnswers: correctCount,
         approved: finalScore >= 80, // Puedes definir aquí la nota aprobatoria (ej. 8.0)
         
@@ -126,24 +137,118 @@ const StudentExam = () => {
 
   // --- VISTA DE RESULTADOS (CUANDO TERMINA) ---
   if (finished) {
+    // Determinamos si aprobó (ejemplo: nota mayor o igual a 80)
+    const passed = score >= 80;
+
+    // Datos para el PDF
+    const handleDownloadCertificate = () => {
+      // Recuperamos los datos que guardamos en la BD o los que tenemos en memoria
+      // NOTA: Como acabamos de terminar, podemos usar los datos que ya tenemos
+      // Pero necesitamos los datos del perfil del alumno.
+      
+      // TRUCO: Como el alumno está logueado, podemos sacar su nombre/curp de `auth` o pasarlos
+      // Lo ideal es haber guardado esos datos en el estado al inicio.
+      // Para simplificar, asumiremos que los datos se guardaron en 'results' correctamente.
+      
+      // Simulamos recuperar los datos del localStorage que usamos temporalmente o del usuario logueado
+      // Lo mejor es pasarlos a esta función.
+      
+      // Para no complicar la lectura de BD de nuevo, usaremos los datos que enviamos a Firebase en finishExam
+      // Necesitamos hacer un pequeño cambio arriba para tener esos datos disponibles aquí.
+      
+      alert("⚠️ Para descargar la constancia, ve a tu historial o pídesela al instructor (Implementación rápida).");
+      // O mejor aún, hagámoslo bien:
+    };
+    
+    // MEJOR OPCIÓN: Leer los datos del usuario logueado para generar el PDF aquí mismo
+    const user = auth.currentUser; 
+
+    const downloadPDF = async () => {
+       // Necesitamos leer los datos completos del usuario (CURP, Empresa) de nuevo
+       // porque 'auth.currentUser' solo tiene email y nombre básico.
+       if(!user) return;
+       
+       try {
+         const userDoc = await getDoc(doc(db, "users", user.uid));
+         if(userDoc.exists()) {
+            const userData = userDoc.data();
+            
+            // Preparamos los datos para la nueva constancia
+            const incorrectAnswers = exam.questions
+              .map((q, index) => ({
+                question: q.text,
+                yourAnswer: answers[index] !== undefined ? q.options[answers[index]] : "No respondida",
+                correctAnswer: q.options[q.correctOption],
+                isCorrect: answers[index] === q.correctOption
+              }))
+              .filter(item => !item.isCorrect);
+
+            const studentPDFData = {
+                studentName: userData.fullName,
+                studentEmail: user.email, // <-- Agregamos el email del usuario logueado
+                studentCurp: userData.curp,
+                studentOccupation: userData.occupation,
+                studentCompany: userData.company,
+            };
+
+            const examPDFData = {
+                examTitle: exam.title
+            };
+
+            // Llamamos a la nueva función
+            generateConstancia(studentPDFData, examPDFData, score, incorrectAnswers);
+         }
+       } catch(e) {
+         console.error(e);
+         alert("Error generando PDF");
+       }
+    };
+
+    const handleGoHomeAndLogout = async () => {
+      await signOut(auth);
+      window.location.href = '/'; // Redirigimos a la página principal
+    };
+
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center">
           <div className="mb-4 flex justify-center">
-            <CheckCircle className="text-green-500 w-16 h-16" />
+            {passed ? (
+                <CheckCircle className="text-green-500 w-16 h-16" />
+            ) : (
+                <AlertCircle className="text-red-500 w-16 h-16" />
+            )}
           </div>
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">¡Examen Finalizado!</h2>
-          <p className="text-gray-500 mb-6">Tu calificación ha sido registrada.</p>
           
-          <div className="text-5xl font-bold text-blue-600 mb-4">{score}/100</div>
+          <h2 className="text-3xl font-bold text-gray-800 mb-2">
+            {passed ? "¡Felicidades!" : "Examen Finalizado"}
+          </h2>
           
-          <p className="text-sm text-gray-400">
-            Respondiste correctamente {Math.round((score / 100) * exam.questions.length)} de {exam.questions.length} preguntas.
+          <p className="text-gray-500 mb-6">
+            {passed 
+                ? "Has aprobado la evaluación satisfactoriamente." 
+                : "No has alcanzado el puntaje mínimo para la certificación."}
           </p>
           
+          <div className={`text-5xl font-bold mb-4 ${passed ? 'text-green-600' : 'text-red-600'}`}>
+            {score}/100
+          </div>
+          
+          <p className="text-sm text-gray-400 mb-8">
+            Mínimo aprobatorio: 80/100
+          </p>
+          
+          {/* BOTÓN DE DESCARGA (Ahora siempre visible) */}
           <button 
-            onClick={() => window.location.href = '/'} 
-            className="mt-8 w-full bg-gray-800 text-white py-3 rounded-lg hover:bg-gray-900 transition"
+            onClick={downloadPDF}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition shadow-lg flex items-center justify-center gap-2 mb-4 font-bold"
+          >
+            <FileDown size={20} /> Descargar Constancia
+          </button>
+          
+          <button 
+            onClick={handleGoHomeAndLogout} 
+            className="w-full bg-gray-100 text-gray-600 py-3 rounded-lg hover:bg-gray-200 transition font-medium"
           >
             Volver al Inicio
           </button>

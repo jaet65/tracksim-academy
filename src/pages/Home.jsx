@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, ArrowRight, CheckCircle, GraduationCap } from 'lucide-react';
+import logo from '../assets/Logo.gif'; // Importamos el logo
 
 const Home = () => {
   return (
@@ -25,6 +26,9 @@ const Home = () => {
 
       {/* Hero Section */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 text-center">
+        <div className="flex justify-center mb-8">
+          <img src={logo} alt="TrackSIM Logo" className="h-26" />
+        </div>
         <h1 className="text-4xl sm:text-6xl font-extrabold text-gray-900 tracking-tight mb-6">
           Certificación de <br />
           <span className="text-blue-600">Habilidades Laborales</span>

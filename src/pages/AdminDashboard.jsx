@@ -1,15 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query } from 'firebase/firestore';
 import Papa from 'papaparse';
-import { LogOut, Upload, FileText, CheckCircle, Type } from 'lucide-react';
+import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [examTitle, setExamTitle] = useState(''); // Estado para el nombre del examen
+  const [exams, setExams] = useState([]);
+  const [loadingExams, setLoadingExams] = useState(true);
   const navigate = useNavigate();
+
+  const fetchExams = async () => {
+    setLoadingExams(true);
+    try {
+      const q = query(collection(db, "exams"), orderBy("createdAt", "desc"));
+      const querySnapshot = await getDocs(q);
+      const examsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setExams(examsList);
+    } catch (error) {
+      console.error("Error cargando exámenes: ", error);
+    }
+    setLoadingExams(false);
+  };
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -22,6 +37,10 @@ const AdminDashboard = () => {
     const map = { 'A': 0, 'B': 1, 'C': 2 };
     return map[cleanLetter] !== undefined ? map[cleanLetter] : -1;
   };
+
+  useEffect(() => {
+    fetchExams();
+  }, []);
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -76,6 +95,7 @@ const AdminDashboard = () => {
           // Limpiar formulario
           setExamTitle('');
           e.target.value = null;
+          fetchExams(); // Recargar la lista de exámenes
 
         } catch (error) {
           console.error("Error subiendo:", error);
@@ -91,20 +111,51 @@ const AdminDashboard = () => {
     });
   };
 
+  const handleDeleteExam = async (examId, examTitle) => {
+    if (window.confirm(`¿Estás seguro de que quieres eliminar el examen "${examTitle}"? Esta acción no se puede deshacer.`)) {
+      try {
+        await deleteDoc(doc(db, "exams", examId));
+        alert(`Examen "${examTitle}" eliminado con éxito.`);
+        // Actualizar la lista de exámenes en el estado para reflejar el cambio
+        setExams(exams.filter(exam => exam.id !== examId));
+      } catch (error) {
+        console.error("Error eliminando examen: ", error);
+        alert("Hubo un error al eliminar el examen.");
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navbar */}
       <nav className="bg-white shadow-sm p-4 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <CheckCircle className="text-blue-600" /> Panel de Administración
           </h1>
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors bg-gray-100 px-4 py-2 rounded-lg"
-          >
-            <LogOut size={18} /> Salir
-          </button>
+          
+          <div className="flex flex-wrap gap-2">
+            {/* Botón para ir a Resultados */}
+            <button 
+              onClick={() => navigate('/admin/resultados')}
+              className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg transition-colors font-medium"
+            >
+              <List size={20} /> Ver Resultados
+            </button>
+            {/* Botón para ir a Usuarios */}
+            <button 
+              onClick={() => navigate('/admin/usuarios')}
+              className="flex items-center gap-2 text-purple-600 hover:bg-purple-50 px-4 py-2 rounded-lg transition-colors font-medium"
+            >
+              <Users size={20} /> Gestionar Usuarios
+            </button>
+
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors bg-gray-100 px-4 py-2 rounded-lg"
+            >
+              <LogOut size={18} /> Salir
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -171,6 +222,41 @@ const AdminDashboard = () => {
             <span className="font-mono bg-gray-100 px-1 rounded">Pregunta, Opcion A, Opcion B, Opcion C, Respuesta</span>
           </div>
 
+        </div>
+
+        {/* Lista de Exámenes Existentes */}
+        <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-gray-300">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+            <BookCopy className="text-gray-500" /> Exámenes Cargados
+          </h2>
+          {loadingExams ? (
+            <div className="flex justify-center items-center p-8">
+              <Loader className="animate-spin text-blue-600" />
+              <span className="ml-3 text-gray-500">Cargando exámenes...</span>
+            </div>
+          ) : exams.length === 0 ? (
+            <p className="text-center text-gray-500 py-4">No hay exámenes cargados todavía.</p>
+          ) : (
+            <ul className="space-y-3">
+              {exams.map(exam => (
+                <li key={exam.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                  <div>
+                    <p className="font-bold text-gray-800">{exam.title}</p>
+                    <p className="text-xs text-gray-500">
+                      {exam.totalQuestions} preguntas - Creado el {new Date(exam.createdAt.seconds * 1000).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteExam(exam.id, exam.title)}
+                    className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors"
+                    title="Eliminar examen"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </main>
     </div>
