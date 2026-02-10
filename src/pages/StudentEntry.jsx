@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
-import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User, ShieldAlert } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User, ShieldAlert, Award } from 'lucide-react';
 import logo from '../assets/Logo.gif'; // Importamos el logo
 
 const StudentEntry = () => {
@@ -193,6 +192,13 @@ const StudentEntry = () => {
             >
               <User size={16} /> Editar Perfil
             </button>
+            <button 
+              onClick={() => navigate('/portal/mis-resultados')}
+              className="text-sm text-gray-400 hover:text-blue-500 flex items-center justify-center gap-2 transition-colors"
+            >
+              <Award size={16} /> Mis Resultados
+            </button>
+
             <button 
               onClick={() => auth.signOut()}
               className="text-sm text-gray-400 hover:text-red-500 flex items-center justify-center gap-2 transition-colors"

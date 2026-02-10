@@ -6,6 +6,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import StudentExam from './pages/StudentExam';
 import StudentEntry from './pages/StudentEntry';
 import CompleteProfile from './pages/CompleteProfile';
+import StudentResults from './pages/StudentResults'; // Nueva importación
 import EditProfile from './pages/EditProfile'; // Nueva importación
 import AdminResults from './pages/AdminResults';
 import AdminUsers from './pages/AdminUsers'; // <-- Nueva página
@@ -24,6 +25,7 @@ function App() {
         {/* Rutas Protegidas de Alumno */}
         {/* Antes esta era la raíz, ahora es /portal */}
         <Route path="/portal" element={<StudentEntry />} />
+        <Route path="/portal/mis-resultados" element={<StudentResults />} /> {/* Nueva ruta */}
         <Route path="/editar-perfil" element={<EditProfile />} /> {/* Nueva ruta */}
         <Route path="/examen/:id" element={<StudentExam />} />
         
