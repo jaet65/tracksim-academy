@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, useBeforeUnload } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
 import { doc, getDoc, addDoc, collection, query, where, getDocs, deleteDoc, limit } from 'firebase/firestore';import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, EyeOff, Maximize, ArrowRight } from 'lucide-react';
 import logo from '../assets/Logo.png'; // Importamos el logo
@@ -23,8 +23,33 @@ const StudentExam = () => {
   const [visibilityWarnings, setVisibilityWarnings] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [terminatedForCheating, setTerminatedForCheating] = useState(false);
+  const [showConfirmFinishModal, setShowConfirmFinishModal] = useState(false); // <-- Nuevo estado para el modal de confirmación
   const [isFullscreen, setIsFullscreen] = useState(document.fullscreenElement != null);
   const [rulesAccepted, setRulesAccepted] = useState(false); // <-- Nuevo estado
+
+  const MAX_VISIBILITY_WARNINGS = 3; // Número de advertencias permitidas antes de finalizar el examen
+
+  // Helper function to shuffle an array and return the shuffled array along with a map
+  // from new index to original index
+  const shuffleArrayWithMap = (array) => {
+    const shuffledArray = [...array];
+    const originalIndexMap = Array.from({ length: array.length }, (_, i) => i);
+
+    for (let i = shuffledArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledArray[i], shuffledArray[j]] = [shuffledArray[j], shuffledArray[i]];
+      [originalIndexMap[i], originalIndexMap[j]] = [originalIndexMap[j], originalIndexMap[i]];
+    }
+    return { shuffledArray, originalIndexMap };
+  };
+
+  // --- NUEVO: Bloquear navegación del navegador ---
+  useBeforeUnload(useCallback((event) => {
+    if (!finished) { // Only prompt if the exam is not finished
+      event.preventDefault();
+      event.returnValue = ''; // Chrome requires returnValue to be set
+    }
+  }, [finished]));
 
   // Clave única para guardar el progreso en localStorage
   const storageKey = `exam_progress_${auth.currentUser?.uid}_${id}`;
@@ -38,7 +63,16 @@ const StudentExam = () => {
 
         if (docSnap.exists()) {
           const examData = docSnap.data();
-          setExam(examData); // Primero cargamos el examen
+          // Shuffle options for each question
+          const processedQuestions = examData.questions.map(q => {
+            const { shuffledArray, originalIndexMap } = shuffleArrayWithMap(q.options);
+            return {
+              ...q,
+              shuffledOptions: shuffledArray,
+              originalIndexMap: originalIndexMap,
+            };
+          });
+          setExam({ ...examData, questions: processedQuestions }); // Primero cargamos el examen
         } else {
           alert("Examen no encontrado");
           setLoading(false);
@@ -105,13 +139,11 @@ const StudentExam = () => {
 
   // --- NUEVO: Efecto para detectar cambio de pestaña ---
   useEffect(() => {
-    const MAX_WARNINGS = 3; // El examen termina en el 3er intento de salir
-
     const handleFocusLoss = () => {
       if (!finished && exam) {
         setVisibilityWarnings(prev => {
           const newCount = prev + 1;
-          if (newCount >= MAX_WARNINGS) {
+          if (newCount > MAX_VISIBILITY_WARNINGS) { // Exam terminates on the (MAX_VISIBILITY_WARNINGS + 1)th offense
             setTerminatedForCheating(true);
             finishExam();
           } else {
@@ -122,11 +154,11 @@ const StudentExam = () => {
       }
     };
 
-    const handleFullscreenChange = () => {
+    const handleFullscreenChange = () => { // This is the key condition
       const isCurrentlyFullscreen = document.fullscreenElement != null;
       setIsFullscreen(isCurrentlyFullscreen);
       if (!isCurrentlyFullscreen && !finished && exam) {
-        handleFocusLoss(); // Si sale de pantalla completa, cuenta como una falta.
+        handleFocusLoss(); // If exits fullscreen, count as a warning.
       }
     };
 
@@ -137,14 +169,15 @@ const StudentExam = () => {
     return () => {
       document.removeEventListener("visibilitychange", () => { if (document.hidden) handleFocusLoss(); });
       window.removeEventListener("blur", handleFocusLoss);
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange); // Clean up event listener
     };
-  }, [finished, exam]); // <-- AÑADIMOS 'exam' A LAS DEPENDENCIAS
+  }, [finished, exam, showWarningModal, showConfirmFinishModal]);
 
   // Efecto para guardar el progreso en localStorage
   useEffect(() => {
     // Solo guardamos si el examen ha cargado y no ha finalizado
     if (exam && !finished) {
+      // Store the original index of the selected option
       const progress = {
         currentQuestionIndex,
         answers,
@@ -163,9 +196,10 @@ const StudentExam = () => {
 
   // 3. Manejar selección de respuesta
   const handleSelectOption = (optionIndex) => {
+    const question = exam.questions[currentQuestionIndex];
     setAnswers({
       ...answers,
-      [currentQuestionIndex]: optionIndex
+      [currentQuestionIndex]: question.originalIndexMap[optionIndex] // Store the ORIGINAL index
     });
   };
 
@@ -173,14 +207,16 @@ const StudentExam = () => {
   const finishExam = async () => {
     // --- CORRECCIÓN ---
     // Añadimos una guarda para evitar errores si el examen aún no ha cargado.
-    if (!exam) {
+    // Y otra para evitar que se ejecute múltiples veces.
+    if (!exam || finished) {
+      setShowConfirmFinishModal(false);
       console.warn("Se intentó finalizar un examen que aún no se había cargado.");
       return;
     }
     // Calculamos la nota
     let correctCount = 0;
     exam.questions.forEach((q, index) => {
-      if (answers[index] === q.correctOption) {
+      if (answers[index] === q.correctOption) { // answers[index] now holds the ORIGINAL index
         correctCount++;
       }
     });
@@ -242,6 +278,8 @@ const StudentExam = () => {
       
     } catch (e) {
       console.error("Error guardando resultado", e);
+    } finally {
+      setShowConfirmFinishModal(false); // Ocultar el modal al finalizar
     }
   };
 
@@ -276,7 +314,7 @@ const StudentExam = () => {
               <EyeOff className="w-7 h-7 text-red-500 mt-1 flex-shrink-0" />
               <div>
                 <h3 className="font-bold text-lg">No Salir de la Pantalla</h3>
-                <p className="text-gray-500">El examen debe realizarse en pantalla completa. Si sales de la pestaña o minimizas la ventana, recibirás una advertencia. Después de <strong>3 advertencias</strong>, el examen finalizará automáticamente.</p>
+                <p className="text-gray-500">El examen debe realizarse en pantalla completa. Si sales de la pestaña o minimizas la ventana, recibirás una advertencia. Después de <strong>{MAX_VISIBILITY_WARNINGS} advertencias</strong>, el examen finalizará automáticamente.</p>
               </div>
             </li>
           </ul>
@@ -439,7 +477,7 @@ const StudentExam = () => {
           <h2 className="text-4xl font-bold mb-4">¡ADVERTENCIA!</h2>
           <p className="text-xl mb-2">Has salido de la ventana del examen.</p>
           <p className="text-lg mb-8">Permanecer en esta página es obligatorio. Si sales de nuevo, el examen podría finalizarse.</p>
-          <p className="font-bold text-2xl mb-10">Advertencia {visibilityWarnings} de 3</p>
+          <p className="font-bold text-2xl mb-10">Advertencia {visibilityWarnings} de {MAX_VISIBILITY_WARNINGS}</p>
           <button onClick={() => setShowWarningModal(false)} className="bg-white text-red-700 font-bold px-10 py-4 rounded-lg text-xl">
             Entendido, volver al examen
           </button>
@@ -448,6 +486,29 @@ const StudentExam = () => {
     );
   }
 
+  // --- NUEVO: Modal para confirmar la finalización del examen ---
+  if (showConfirmFinishModal) {
+    return (
+      <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
+          <AlertCircle className="mx-auto w-16 h-16 text-yellow-500 mb-4" />
+          <h2 className="text-2xl font-bold mb-2">¿Finalizar Examen?</h2>
+          <p className="text-gray-600 mb-6">¿Estás seguro de que quieres terminar y enviar tus respuestas?</p>
+          <div className="flex justify-center gap-4">
+            <button onClick={() => setShowConfirmFinishModal(false)} className="px-6 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 font-medium">
+              No, continuar
+            </button>
+            <button 
+              onClick={finishExam} 
+              className="px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 font-bold"
+            >
+              Sí, finalizar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   // --- NUEVO: Pantalla para forzar Fullscreen ---
   if (!isFullscreen && !finished) {
     return (
@@ -468,8 +529,14 @@ const StudentExam = () => {
   // --- VISTA DEL EXAMEN (MIENTRAS RESPONDE) ---
   const question = exam.questions[currentQuestionIndex];
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+  return ( // Add anti-cheat event handlers to the main container
+    <div
+      className="min-h-screen bg-gray-50 flex flex-col"
+      onContextMenu={(e) => e.preventDefault()} // Disable right-click
+      onCopy={(e) => e.preventDefault()}       // Disable copy
+      onCut={(e) => e.preventDefault()}        // Disable cut
+      onPaste={(e) => e.preventDefault()}      // Disable paste
+    >
       {/* Header con Timer */}
       <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
@@ -504,18 +571,18 @@ const StudentExam = () => {
             </h2>
 
             <div className="space-y-3">
-              {question.options.map((opt, idx) => (
+              {question.shuffledOptions.map((shuffledOpt, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSelectOption(idx)}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                    answers[currentQuestionIndex] === idx 
+                    answers[currentQuestionIndex] === question.originalIndexMap[idx]
                       ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' 
                       : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
                   }`}
                 >
                   <span className="inline-block w-6 font-bold mr-2">{String.fromCharCode(65 + idx)}.</span>
-                  {opt}
+                  {shuffledOpt}
                 </button>
               ))}
             </div>
@@ -534,7 +601,7 @@ const StudentExam = () => {
             {currentQuestionIndex === exam.questions.length - 1 ? (
               <button
                 onClick={() => {
-                  if(confirm("¿Estás seguro de que quieres finalizar el examen?")) finishExam();
+                  setShowConfirmFinishModal(true); // Mostrar el modal personalizado
                 }}
                 className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 shadow-md transition-colors font-bold"
               >
