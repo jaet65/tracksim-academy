@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
-import { collection, getDocs, orderBy, query, doc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, doc, deleteDoc, addDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2} from 'lucide-react';
+import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat} from 'lucide-react';
 import { generateDC3 } from '../utils/generateDC3'; // Para el formato oficial
 import { generateConstancia } from '../utils/generateConstancia'; // Para la constancia con errores
 
@@ -88,6 +88,26 @@ const AdminResults = () => {
     }
   };
 
+  // 5. Aprobar un nuevo intento
+  const handleApproveRetake = async (result) => {
+    const { studentUid, examId, studentName, examTitle } = result;
+    if (window.confirm(`¿Aprobar un nuevo intento para ${studentName} en el examen "${examTitle}"?`)) {
+      try {
+        const approvalsRef = collection(db, "retake_approvals");
+        await addDoc(approvalsRef, {
+          studentUid,
+          examId,
+          approvedAt: new Date(),
+          approvedBy: auth.currentUser?.email || 'admin'
+        });
+        alert("¡Nuevo intento aprobado! El alumno ya puede realizar el examen de nuevo.");
+      } catch (error) {
+        console.error("Error aprobando intento:", error);
+        alert("No se pudo aprobar el nuevo intento.");
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navbar Admin */}
@@ -156,8 +176,15 @@ const AdminResults = () => {
                 ) : (
                   filteredResults.map((r) => (
                     <tr key={r.id} className="hover:bg-blue-50 transition-colors group">
-                      <td className="p-4">
-                        <div className="font-bold text-gray-800">{r.studentName}</div>
+                      <td className="p-4 flex items-center gap-2">
+                        <div>
+                          <div className="font-bold text-gray-800">{r.studentName}</div>
+                          {r.attempt > 1 && (
+                            <span className="text-xs font-bold bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+                              Intento #{r.attempt}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-gray-400 md:hidden">{r.studentCompany}</div>
                       </td>
                       <td className="p-4">
@@ -238,6 +265,14 @@ const AdminResults = () => {
                                 <Printer size={18} />
                             </button>
                           )}
+                          {/* Botón para Aprobar Retoma */}
+                          <button
+                            onClick={() => handleApproveRetake(r)}
+                            className="text-orange-500 hover:text-orange-700 p-2 rounded-full hover:bg-orange-100 transition"
+                            title="Aprobar un nuevo intento para este alumno"
+                          >
+                            <Repeat size={18} />
+                          </button>
                           {/* Botón para Eliminar Resultado */}
                           <button
                             onClick={() => handleDeleteResult(r.id, r.studentName)}

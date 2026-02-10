@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
-import { doc, getDoc, addDoc, collection } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, query, where, getDocs, deleteDoc, limit } from 'firebase/firestore';
 import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft } from 'lucide-react';
+import logo from '../assets/Logo.png'; // Importamos el logo
 import { generateConstancia } from '../utils/generateConstancia';
 import { signOut } from 'firebase/auth'; // Importamos signOut
 
@@ -15,6 +16,8 @@ const StudentExam = () => {
   const [timeLeft, setTimeLeft] = useState(45 * 60); // 45 minutos en segundos (Configurable)
   const [finished, setFinished] = useState(false);
   const [score, setScore] = useState(0);
+  const [attempt, setAttempt] = useState(0); // Estado para guardar el número de intento
+  const [timeUp, setTimeUp] = useState(false); // Nuevo estado para controlar si el tiempo se agotó
 
   // 1. Cargar el examen desde Firebase
   useEffect(() => {
@@ -34,6 +37,24 @@ const StudentExam = () => {
         setLoading(false);
       }
     };
+
+    // Consumir el pase de retoma si existe
+    const consumeRetakeApproval = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const approvalsRef = collection(db, "retake_approvals");
+      const q = query(approvalsRef, where("studentUid", "==", user.uid), where("examId", "==", id), limit(1));
+      const snapshot = await getDocs(q);
+
+      if (!snapshot.empty) {
+        const approvalDoc = snapshot.docs[0];
+        await deleteDoc(doc(db, "retake_approvals", approvalDoc.id));
+        console.log("Pase de retoma consumido.");
+      }
+    };
+
+    consumeRetakeApproval();
     fetchExam();
   }, [id]);
 
@@ -43,6 +64,7 @@ const StudentExam = () => {
     
     // Si el tiempo llega a 0, finalizamos
     if (timeLeft <= 0) {
+      setTimeUp(true); // Marcamos que el tiempo se agotó
       finishExam();
       return;
     }
@@ -79,10 +101,6 @@ const StudentExam = () => {
       }
     });
 
-    const finalScore = Number(((correctCount / exam.questions.length) * 100).toFixed(2));
-    setScore(finalScore);
-    setFinished(true);
-
     // Guardar el resultado en Firebase (Opcional, para el registro)
     const user = auth.currentUser;
     let studentData = {};
@@ -95,6 +113,16 @@ const StudentExam = () => {
     }
 
     try {
+      // Contar intentos previos para este examen y alumno
+      const resultsQuery = query(collection(db, "results"), where("studentUid", "==", user.uid), where("examId", "==", id));
+      const previousResults = await getDocs(resultsQuery);
+      const attemptNumber = previousResults.size + 1;
+      const finalScore = Number(((correctCount / exam.questions.length) * 100).toFixed(2));
+
+      setScore(finalScore);
+      setAttempt(attemptNumber); // Guardamos el intento en el estado
+      setFinished(true);
+
       await addDoc(collection(db, "results"), {
         examId: id,
         examTitle: exam.title,
@@ -114,6 +142,7 @@ const StudentExam = () => {
         // Datos Académicos
         score: finalScore,
         totalQuestions: exam.questions.length,
+        attempt: attemptNumber, // <-- Guardamos el número de intento
         
         // Guardamos las respuestas para poder regenerar la constancia
         studentAnswers: answers,
@@ -221,13 +250,16 @@ const StudentExam = () => {
           </div>
           
           <h2 className="text-3xl font-bold text-gray-800 mb-2">
-            {passed ? "¡Felicidades!" : "Examen Finalizado"}
+            {timeUp ? "¡Tiempo Agotado!" : (passed ? "¡Felicidades!" : "Examen Finalizado")}
           </h2>
           
           <p className="text-gray-500 mb-6">
-            {passed 
-                ? "Has aprobado la evaluación satisfactoriamente." 
-                : "No has alcanzado el puntaje mínimo para la certificación."}
+            {timeUp
+              ? "El tiempo para completar la evaluación ha terminado. Tu progreso ha sido guardado."
+              : (passed 
+                  ? "Has aprobado la evaluación satisfactoriamente." 
+                  : "No has alcanzado el puntaje mínimo para la certificación.")
+            }
           </p>
           
           <div className={`text-5xl font-bold mb-4 ${passed ? 'text-green-600' : 'text-red-600'}`}>
@@ -238,6 +270,12 @@ const StudentExam = () => {
             Mínimo aprobatorio: 80/100
           </p>
           
+          {attempt > 0 && (
+            <span className="inline-block bg-gray-100 text-gray-500 text-xs font-bold px-3 py-1 rounded-full mb-6">
+              Intento #{attempt}
+            </span>
+          )}
+
           {/* BOTÓN DE DESCARGA (Ahora siempre visible) */}
           <button 
             onClick={downloadPDF}
@@ -265,7 +303,10 @@ const StudentExam = () => {
       {/* Header con Timer */}
       <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <h1 className="font-bold text-gray-700 truncate w-1/2">{exam.title}</h1>
+          <div className="flex items-center gap-3 w-2/3">
+            <img src={logo} alt="Logo" className="h-8" />
+            <h1 className="font-bold text-gray-700 truncate">{exam.title}</h1>
+          </div>
           <div className={`flex items-center gap-2 font-mono text-xl font-bold ${timeLeft < 60 ? 'text-red-600 animate-pulse' : 'text-blue-600'}`}>
             <Clock size={20} />
             {formatTime(timeLeft)}

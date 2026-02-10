@@ -71,6 +71,9 @@ const Login = () => {
   // 3. LOGIN CON GOOGLE (POPUP)
   const handleGoogleLogin = async () => {
     const provider = new GoogleAuthProvider();
+    // Forzamos a que siempre muestre el selector de cuentas de Google
+    provider.setCustomParameters({ prompt: 'select_account' });
+
     setError('');
     setLoading(true);
     

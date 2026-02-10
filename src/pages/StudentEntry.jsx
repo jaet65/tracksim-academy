@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; // Importamos collection y getDocs
+import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User } from 'lucide-react';
+import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User, ShieldAlert } from 'lucide-react';
 import logo from '../assets/Logo.png'; // Importamos el logo
 
 const StudentEntry = () => {
   const [selectedExamId, setSelectedExamId] = useState('');
+  const [examStatus, setExamStatus] = useState({ blocked: false, message: '' });
   const [availableExams, setAvailableExams] = useState([]); // Lista de exámenes
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,41 @@ const StudentEntry = () => {
 
     return () => unsubscribe();
   }, [navigate]);
+
+  // Efecto para verificar si el examen puede ser tomado
+  useEffect(() => {
+    const checkExamStatus = async () => {
+      if (!selectedExamId || !auth.currentUser) {
+        setExamStatus({ blocked: false, message: '' });
+        return;
+      }
+
+      const studentUid = auth.currentUser.uid;
+
+      // 1. Verificar si ya hay un resultado para este examen
+      const resultsRef = collection(db, "results");
+      const qResults = query(resultsRef, where("studentUid", "==", studentUid), where("examId", "==", selectedExamId), limit(1));
+      const resultsSnap = await getDocs(qResults);
+
+      if (resultsSnap.empty) {
+        setExamStatus({ blocked: false, message: '' }); // No hay intentos, puede proceder
+        return;
+      }
+
+      // 2. Si hay resultado, verificar si hay una aprobación de retoma
+      const approvalsRef = collection(db, "retake_approvals");
+      const qApprovals = query(approvalsRef, where("studentUid", "==", studentUid), where("examId", "==", selectedExamId), limit(1));
+      const approvalsSnap = await getDocs(qApprovals);
+
+      if (approvalsSnap.empty) {
+        setExamStatus({ blocked: true, message: 'Ya has realizado esta evaluación. Pide a tu instructor/coordinador que apruebe un nuevo intento.' });
+      } else {
+        setExamStatus({ blocked: false, message: 'Tienes un nuevo intento aprobado. ¡Mucha suerte!' });
+      }
+    };
+
+    checkExamStatus();
+  }, [selectedExamId]);
 
   const handleStartExam = (e) => {
     e.preventDefault();
@@ -123,16 +159,23 @@ const StudentEntry = () => {
           </div>
 
           {/* Información del examen seleccionado (Opcional) */}
-          {selectedExamId && (
+          {selectedExamId && !examStatus.blocked && (
             <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-xs border border-blue-100 flex items-center gap-2">
-              <span className="font-bold">Nota:</span> Asegúrate de tener conexión estable antes de iniciar.
+              <span className="font-bold">Nota:</span> {examStatus.message || 'Asegúrate de tener conexión estable antes de iniciar.'}
+            </div>
+          )}
+
+          {examStatus.blocked && (
+            <div className="bg-yellow-50 text-yellow-800 p-3 rounded-md text-xs border border-yellow-200 flex items-center gap-2">
+              <ShieldAlert size={28} />
+              <span>{examStatus.message}</span>
             </div>
           )}
 
           <button
             type="submit"
-            disabled={!selectedExamId} // Se deshabilita si no hay selección
-            className={`w-full font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+            disabled={!selectedExamId || examStatus.blocked} // Se deshabilita si no hay selección o está bloqueado
+            className={`w-full font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all ${ // ...
               selectedExamId 
                 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' 
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
