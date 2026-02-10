@@ -161,7 +161,7 @@ const StudentEntry = () => {
           {/* Información del examen seleccionado (Opcional) */}
           {selectedExamId && !examStatus.blocked && (
             <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-xs border border-blue-100 flex items-center gap-2">
-              <span className="font-bold">Nota:</span> {examStatus.message || 'Asegúrate de tener conexión estable antes de iniciar, una vez que comiences, el temporizador no se detendrá. ¡Buena suerte!'}
+              <span className="font-bold">Nota:</span> {examStatus.message || 'Asegúrate de tener conexión estable antes de iniciar. ¡Buena suerte!'}
             </div>
           )}
 
