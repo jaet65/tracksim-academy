@@ -4,7 +4,7 @@ import { auth, db } from '../firebase-config';
 import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User, ShieldAlert } from 'lucide-react';
-import logo from '../assets/Logo.png'; // Importamos el logo
+import logo from '../assets/Logo.gif'; // Importamos el logo
 
 const StudentEntry = () => {
   const [selectedExamId, setSelectedExamId] = useState('');
@@ -116,7 +116,7 @@ const StudentEntry = () => {
         
         {/* Header con Bienvenida */}
         <div className="flex justify-center mb-6">
-          <img src={logo} alt="Logo de la Academia" className="h-12" />
+          <img src={logo} alt="Logo de la Academia" className="h-30" />
         </div>
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-800">
@@ -161,7 +161,7 @@ const StudentEntry = () => {
           {/* Información del examen seleccionado (Opcional) */}
           {selectedExamId && !examStatus.blocked && (
             <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-xs border border-blue-100 flex items-center gap-2">
-              <span className="font-bold">Nota:</span> {examStatus.message || 'Asegúrate de tener conexión estable antes de iniciar.'}
+              <span className="font-bold">Nota:</span> {examStatus.message || 'Asegúrate de tener conexión estable antes de iniciar, una vez que comiences, el temporizador no se detendrá. ¡Buena suerte!'}
             </div>
           )}
 

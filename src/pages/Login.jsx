@@ -121,7 +121,7 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
         <div className="flex justify-center mb-6">
-          <img src={logo} alt="TrackSIM Logo" className="h-12" />
+          <img src={logo} alt="TrackSIM Logo" className="h-30" />
         </div>
 
         <h2 className="text-2xl font-bold text-center text-gray-800 mb-8">

@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
 import { doc, getDoc, addDoc, collection, query, where, getDocs, deleteDoc, limit } from 'firebase/firestore';
 import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft } from 'lucide-react';
-import logo from '../assets/Logo.png'; // Importamos el logo
+import logo from '../assets/Logo.gif'; // Importamos el logo
 import { generateConstancia } from '../utils/generateConstancia';
 import { signOut } from 'firebase/auth'; // Importamos signOut
 
@@ -19,6 +19,9 @@ const StudentExam = () => {
   const [attempt, setAttempt] = useState(0); // Estado para guardar el número de intento
   const [timeUp, setTimeUp] = useState(false); // Nuevo estado para controlar si el tiempo se agotó
 
+  // Clave única para guardar el progreso en localStorage
+  const storageKey = `exam_progress_${auth.currentUser?.uid}_${id}`;
+
   // 1. Cargar el examen desde Firebase
   useEffect(() => {
     const fetchExam = async () => {
@@ -27,9 +30,11 @@ const StudentExam = () => {
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-          setExam(docSnap.data());
+          const examData = docSnap.data();
+          setExam(examData); // Primero cargamos el examen
         } else {
           alert("Examen no encontrado");
+          setLoading(false);
         }
       } catch (error) {
         console.error("Error obteniendo examen:", error);
@@ -58,6 +63,21 @@ const StudentExam = () => {
     fetchExam();
   }, [id]);
 
+  // Efecto para restaurar el progreso DESPUÉS de cargar el examen
+  useEffect(() => {
+    if (exam) { // Solo se ejecuta cuando 'exam' ya tiene datos
+      const savedProgressJSON = localStorage.getItem(storageKey);
+      if (savedProgressJSON) {
+        const savedProgress = JSON.parse(savedProgressJSON);
+        setAnswers(savedProgress.answers || {});
+        setCurrentQuestionIndex(savedProgress.currentQuestionIndex || 0);
+        setTimeLeft(savedProgress.timeLeft || 45 * 60);
+      }
+      // Marcamos la carga como finalizada aquí
+      setLoading(false);
+    }
+  }, [exam, storageKey]); // Depende de 'exam'
+
   // 2. Lógica del Cronómetro
   useEffect(() => {
     if (!exam || finished) return;
@@ -75,6 +95,19 @@ const StudentExam = () => {
 
     return () => clearInterval(timer);
   }, [timeLeft, exam, finished]);
+
+  // Efecto para guardar el progreso en localStorage
+  useEffect(() => {
+    // Solo guardamos si el examen ha cargado y no ha finalizado
+    if (exam && !finished) {
+      const progress = {
+        currentQuestionIndex,
+        answers,
+        timeLeft,
+      };
+      localStorage.setItem(storageKey, JSON.stringify(progress));
+    }
+  }, [currentQuestionIndex, answers, timeLeft, exam, finished, storageKey]);
 
   // Formato de tiempo MM:SS
   const formatTime = (seconds) => {
@@ -153,8 +186,8 @@ const StudentExam = () => {
         timestamp: new Date()
       });
       
-      // Limpiamos los datos del local para seguridad
-      localStorage.removeItem('studentData');
+      // Limpiamos el progreso del examen del localStorage
+      localStorage.removeItem(storageKey);
       
     } catch (e) {
       console.error("Error guardando resultado", e);
@@ -304,7 +337,7 @@ const StudentExam = () => {
       <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3 w-2/3">
-            <img src={logo} alt="Logo" className="h-8" />
+            <img src={logo} alt="Logo" className="h-20" />
             <h1 className="font-bold text-gray-700 truncate">{exam.title}</h1>
           </div>
           <div className={`flex items-center gap-2 font-mono text-xl font-bold ${timeLeft < 60 ? 'text-red-600 animate-pulse' : 'text-blue-600'}`}>
