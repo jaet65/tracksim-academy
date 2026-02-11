@@ -127,7 +127,7 @@ const StudentExam = () => {
         studentAnswers: answers,
         examQuestions: exam.questions,
         correctAnswers: correctCount,
-        approved: finalScore >= 80, // Puedes definir aquí la nota aprobatoria (ej. 8.0)
+        approved: finalScore >= 60, // Puedes definir aquí la nota aprobatoria (ej. 8.0)
         
         timestamp: new Date()
       });
@@ -196,7 +196,7 @@ const StudentExam = () => {
   // --- VISTA DE RESULTADOS (CUANDO TERMINA) ---
   if (finished) {
     // Determinamos si aprobó (ejemplo: nota mayor o igual a 80)
-    const passed = score >= 80;
+    const passed = score >= 60;
 
     // --- NUEVO: Creamos una lista con las respuestas incorrectas ---
     const incorrectAnswers = exam.questions
@@ -320,7 +320,7 @@ const StudentExam = () => {
           </div>
           
           <p className="text-sm text-gray-400 mb-8 text-center">
-            Mínimo aprobatorio: 80/100
+            Mínimo aprobatorio: 60/100
           </p>
           
           {attempt > 0 && (

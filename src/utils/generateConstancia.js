@@ -122,7 +122,7 @@ export const generateConstancia = (studentData, examData, score, incorrectAnswer
   }
 
   // --- 4. MENSAJE FINAL (FELICITACIÓN O MOTIVACIÓN) ---
-  const passed = score >= 80;
+  const passed = score >= 60;
   const finalMessage = passed
     ? "¡Felicidades! Has demostrado un excelente dominio de los conocimientos. Sigue así y continúa fortaleciendo tus habilidades para un futuro profesional exitoso.\n\nSi el resultado de tus ejercicios en el simulador es aprobatorio, recibirás tu constancia DC-3 vía correo electrónico. Sigamos trabajando juntos por la seguridad vial."
     : "No te desanimes. Cada evaluación es una oportunidad para aprender y crecer. Revisa tus errores, refuerza los temas y prepárate para el siguiente reto. ¡Tú puedes!";

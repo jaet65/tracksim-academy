@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
-import { collection, getDocs, orderBy, query, doc, deleteDoc, addDoc } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, doc, deleteDoc, addDoc, writeBatch, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat} from 'lucide-react';
+import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat, Upload, Loader } from 'lucide-react';
 import { generateDC3 } from '../utils/generateDC3'; // Para el formato oficial
 import { generateConstancia } from '../utils/generateConstancia'; // Para la constancia con errores
+import Papa from 'papaparse';
 
 const AdminResults = () => {
   const [results, setResults] = useState([]);
@@ -13,7 +14,9 @@ const AdminResults = () => {
   const [pendingApprovals, setPendingApprovals] = useState([]); // <-- NUEVO: Para reintentos pendientes
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [uploading, setUploading] = useState(false); // Estado para la carga de notas
   const [currentPage, setCurrentPage] = useState(1); // <-- NUEVO: Para paginación
+  const [showExportModal, setShowExportModal] = useState(false); // <-- NUEVO: Para el modal de exportación
   const [resultsPerPage] = useState(20); // <-- NUEVO: Resultados por página
   const navigate = useNavigate();
   const location = useLocation(); // <-- NUEVO: Para leer la URL
@@ -28,7 +31,7 @@ const AdminResults = () => {
   }, [location.search]);
 
   // 1. Cargar resultados desde Firebase
-  useEffect(() => {
+  const fetchAllData = async () => {
     const fetchAllData = async () => {
       try {
         // Cargar resultados
@@ -64,8 +67,11 @@ const AdminResults = () => {
     };
 
     fetchAllData();
-  }, []);
+  };
 
+  useEffect(() => {
+    fetchAllData();
+  }, []);
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/login');
@@ -88,10 +94,30 @@ const AdminResults = () => {
 
 
   // 3. Exportar a CSV (Excel simple)
-  const exportToCSV = () => {
-    const headers = ["Nombre,CURP,Empresa,Examen,Calificacion,Fecha"];
-    const rows = filteredResults.map(r => 
-      `"${r.studentName}","${r.studentCurp}","${r.studentCompany}","${r.examTitle}","${r.score}","${r.dateObj?.toLocaleDateString()}"`
+  const exportToCSV = (filterType) => {
+    const headers = ["Nombre,CURP,Empresa,Examen,Calificacion,Nota Simulador,Fecha"];
+
+    // Primero, filtramos los resultados según el criterio de búsqueda actual
+    let resultsToProcess = filteredResults;
+
+    // Si se pide "solo faltantes", aplicamos ese filtro adicional
+    if (filterType === 'missing') {
+      resultsToProcess = resultsToProcess.filter(r => r.simulatorScore === undefined);
+    }
+
+    // Después, obtenemos solo el último intento de cada examen por alumno de la lista ya filtrada
+    const latestResults = [];
+    const seen = new Set();
+    resultsToProcess.forEach(r => {
+      const key = `${r.studentUid}_${r.examId}`;
+      if (!seen.has(key)) {
+        latestResults.push(r);
+        seen.add(key);
+      }
+    });
+
+    const rows = latestResults.map(r =>
+      `"${r.studentName}","${r.studentCurp}","${r.studentCompany}","${r.examTitle}","${r.score}","${r.simulatorScore !== undefined ? r.simulatorScore : 'TBD'}","${r.dateObj?.toLocaleDateString()}"`
     );
     
     const csvContent = "data:text/csv;charset=utf-8," + headers.concat(rows).join("\n");
@@ -101,6 +127,8 @@ const AdminResults = () => {
     link.setAttribute("download", "reporte_dc3.csv");
     document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link); // Limpiamos el elemento del DOM
+    setShowExportModal(false); // Cerramos el modal después de la descarga
   };
 
   // 4. Eliminar un resultado
@@ -199,6 +227,34 @@ const AdminResults = () => {
     }
   };
 
+  const handleGenerateDC3sSelected = () => {
+    const approvedSelectedResults = results.filter(r => 
+      selectedResults.includes(r.id) && r.score >= 60 && r.simulatorScore !== undefined && Number(r.simulatorScore) >= 60
+    );
+
+    if (approvedSelectedResults.length === 0) {
+      alert("No hay resultados aprobados entre los seleccionados para generar DC-3.");
+      return;
+    }
+
+    if (window.confirm(`Se generarán ${approvedSelectedResults.length} constancias DC-3. Tu navegador podría pedirte permiso para descargar múltiples archivos. ¿Continuar?`)) {
+      approvedSelectedResults.forEach(r => {
+        const pdfStudentData = {
+          studentName: r.studentName,
+          studentFirstName: r.studentFirstName,
+          studentPaternalLastName: r.studentPaternalLastName,
+          studentMaternalLastName: r.studentMaternalLastName,
+          studentCurp: r.studentCurp,
+          studentOccupation: r.studentOccupation,
+          studentCompany: r.studentCompany,
+          studentCompanyRfc: r.studentCompanyRfc
+        };
+        const pdfExamData = { examTitle: r.examTitle };
+        generateDC3(pdfStudentData, pdfExamData);
+      });
+    }
+  };
+
   // 5. Aprobar un nuevo intento
   const handleApproveRetake = async (result) => {
     const { studentUid, examId, studentName, examTitle } = result;
@@ -219,6 +275,81 @@ const AdminResults = () => {
         alert("No se pudo aprobar el nuevo intento.");
       }
     }
+  };
+
+  // 6. Cargar notas de simulador desde CSV
+  const handleSimulatorScoresUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      encoding: "ISO-8859-1",
+      complete: async (parsedResults) => {
+        const scoresData = parsedResults.data;
+        if (!scoresData.length || !scoresData[0].CURP || !scoresData[0].Examen || !scoresData[0]["Nota Simulador"]) {
+          alert("El archivo CSV no tiene el formato correcto. Asegúrate de que contenga las columnas 'CURP', 'Examen' y 'Nota Simulador'.");
+          setUploading(false);
+          e.target.value = null;
+          return;
+        }
+
+        try {
+          const batch = writeBatch(db);
+          let updatedCount = 0;
+          const notFound = [];
+
+          // Creamos un mapa para acceder a los resultados de forma eficiente
+          const resultsMap = new Map();
+          results.forEach(res => {
+            // Clave única: CURP + Título del Examen (normalizado)
+            const key = `${res.studentCurp?.trim()}_${res.examTitle?.trim()}`;
+            // Guardamos el resultado más reciente para esa clave
+            if (!resultsMap.has(key)) {
+              resultsMap.set(key, res);
+            }
+          });
+
+          scoresData.forEach(row => {
+            const key = `${row.CURP?.trim()}_${row.Examen?.trim()}`;
+            const resultToUpdate = resultsMap.get(key);
+
+            if (resultToUpdate) {
+              const resultRef = doc(db, "results", resultToUpdate.id);
+              batch.update(resultRef, { simulatorScore: row["Nota Simulador"] });
+              updatedCount++;
+            } else {
+              notFound.push(`${row.CURP} - ${row.Examen}`);
+            }
+          });
+
+          await batch.commit();
+
+          let summary = `Proceso completado. Se actualizaron ${updatedCount} notas.`;
+          if (notFound.length > 0) {
+            summary += `\n\nNo se encontraron ${notFound.length} registros coincidentes (se busca el intento más reciente):\n- ${notFound.slice(0, 10).join('\n- ')}`;
+            if (notFound.length > 10) summary += '\n- ... y más.';
+            console.warn("Registros no encontrados:", notFound);
+          }
+          alert(summary);
+          
+          fetchAllData(); // Recargamos los datos para ver los cambios
+
+        } catch (error) {
+          console.error("Error actualizando notas:", error);
+          alert("Hubo un error al actualizar las notas en la base de datos.");
+        } finally {
+          setUploading(false);
+          e.target.value = null; // Reseteamos el input
+        }
+      },
+      error: (err) => {
+        alert(`Error al leer el archivo CSV: ${err.message}`);
+        setUploading(false);
+      }
+    });
   };
 
   return (
@@ -270,11 +401,20 @@ const AdminResults = () => {
               >
                 <Repeat size={18} /> Aprobar Retoma ({selectedResults.length})
               </button>
+              <button
+                onClick={handleGenerateDC3sSelected}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm justify-center"
+              >
+                <Printer size={18} /> Generar DC-3 ({selectedResults.filter(id => {
+                  const r = results.find(res => res.id === id);
+                  return r && r.score >= 60 && r.simulatorScore !== undefined && Number(r.simulatorScore) >= 60;
+                }).length})
+              </button>
             </div>
           )}
 
           <button 
-            onClick={exportToCSV}
+            onClick={() => setShowExportModal(true)}
             className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-sm w-full md:w-auto justify-center"
           >
             <Download size={18} /> Descargar Reporte Excel
@@ -297,8 +437,9 @@ const AdminResults = () => {
                   </th>
                   <th className="p-4 font-bold text-gray-600 text-sm">Alumno</th>
                   <th className="p-4 font-bold text-gray-600 text-sm">CURP / Empresa</th>
-                  <th className="p-4 font-bold text-gray-600 text-sm">Examen</th>
-                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm">Nombre Examen</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Examen</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Simulador</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Fecha</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Acciones</th>
                 </tr>
@@ -306,11 +447,11 @@ const AdminResults = () => {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="7" className="p-8 text-center text-gray-500">Cargando resultados...</td>
+                    <td colSpan="8" className="p-8 text-center text-gray-500">Cargando resultados...</td>
                   </tr>
                 ) : filteredResults.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
+                    <td colSpan="8" className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
                   </tr>
                 ) : (
                   currentResults.map((r) => (
@@ -346,12 +487,19 @@ const AdminResults = () => {
                       </td>
                       <td className="p-4 text-center">
                         <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                          r.score >= 80 
+                          r.score >= 60 
                             ? 'bg-green-100 text-green-700' 
                             : 'bg-red-100 text-red-700'
                         }`}>
                           {r.score}
                         </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        {r.simulatorScore !== undefined ? (
+                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-purple-100 text-purple-700">{r.simulatorScore}</span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-500">TBD</span>
+                        )}
                       </td>
                       <td className="p-4 text-right text-sm text-gray-500">
                         {r.dateObj?.toLocaleDateString()}
@@ -387,7 +535,7 @@ const AdminResults = () => {
                             <FileText size={18} />
                           </button>
 
-                          {r.score >= 80 && (
+                          {r.score >= 60 && r.simulatorScore !== undefined && Number(r.simulatorScore) >= 60 && (
                             <button
                                 onClick={() => {
                                     const pdfStudentData = {
@@ -463,6 +611,67 @@ const AdminResults = () => {
             </div>
           )}
         </div>
+
+        {/* Carga de Notas de Simulador */}
+        <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-purple-500">
+          <div className="flex items-center gap-3 mb-2">
+            <Upload className="text-purple-600 w-8 h-8" />
+            <h2 className="text-2xl font-bold text-gray-800">Cargar Notas de Simulador</h2>
+          </div>
+          <p className="text-gray-500 mb-8 max-w-2xl">
+            Sube un archivo <span className="font-mono text-purple-700">.csv</span> con las notas del simulador. El sistema buscará el resultado más reciente del alumno por su <strong className="text-gray-600">CURP</strong> y el <strong className="text-gray-600">título exacto del examen</strong> para actualizar la nota.
+          </p>
+
+          <label className={`
+            block w-full max-w-md mx-auto border-2 border-dashed rounded-lg p-8 cursor-pointer transition-all
+            ${uploading ? 'bg-gray-100 border-gray-300' : 'border-purple-300 hover:bg-purple-50 hover:border-purple-500'}
+          `}>
+            <input 
+              type="file" 
+              accept=".csv" 
+              onChange={handleSimulatorScoresUpload} 
+              disabled={uploading}
+              className="hidden" 
+            />
+            {uploading ? (
+              <div className="flex flex-col items-center gap-2 text-gray-500 font-bold animate-pulse">
+                <Loader className="animate-spin" /> Procesando archivo...
+              </div>
+            ) : (
+              <div className="flex flex-col items-center text-purple-600">
+                <FileText className="mb-2 w-8 h-8" />
+                <span className="font-medium">Haz clic para seleccionar el archivo CSV</span>
+              </div>
+            )}
+          </label>
+          <div className="mt-4 text-center text-xs text-gray-400">Columnas requeridas: <span className="font-mono bg-gray-100 px-1 rounded">CURP</span>, <span className="font-mono bg-gray-100 px-1 rounded">Examen</span>, <span className="font-mono bg-gray-100 px-1 rounded">Nota Simulador</span></div>
+        </div>
+
+        {/* --- NUEVO: Modal para elegir tipo de exportación --- */}
+        {showExportModal && (
+          <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center">
+              <Download className="mx-auto w-12 h-12 text-green-500 mb-4" />
+              <h2 className="text-2xl font-bold mb-2">Tipo de Reporte</h2>
+              <p className="text-gray-600 mb-8">Elige qué datos quieres incluir en el archivo de Excel.</p>
+              <div className="flex flex-col gap-4">
+                <button 
+                  onClick={() => exportToCSV('all')} 
+                  className="w-full px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-bold"
+                >
+                  Descargar Todos los Resultados
+                </button>
+                <button 
+                  onClick={() => exportToCSV('missing')} 
+                  className="w-full px-6 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 font-bold"
+                >
+                  Descargar Solo Faltantes de Simulador
+                </button>
+                <button onClick={() => setShowExportModal(false)} className="mt-2 text-sm text-gray-500 hover:text-gray-700 font-medium">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

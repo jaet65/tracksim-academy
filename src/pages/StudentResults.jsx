@@ -151,7 +151,7 @@ const StudentResults = () => {
                       </td>
                       <td className="p-4 text-center">
                         <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                          r.score >= 80 
+                          r.score >= 60 
                             ? 'bg-green-100 text-green-700' 
                             : 'bg-red-100 text-red-700'
                         }`}>
