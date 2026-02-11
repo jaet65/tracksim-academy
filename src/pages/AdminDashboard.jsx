@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query } from 'firebase/firestore';
-import Papa from 'papaparse';
-import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users } from 'lucide-react';
+import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
@@ -125,6 +124,33 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleResetAllRetakes = async () => {
+    if (window.confirm("ADVERTENCIA: ¿Estás SEGURO de que quieres reiniciar TODOS los reintentos pendientes para TODOS los alumnos? Esta acción es irreversible.")) {
+      if (window.confirm("CONFIRMACIÓN FINAL: Esta acción no se puede deshacer y eliminará todos los pases de reintento existentes. ¿Continuar?")) {
+        setLoading(true);
+        try {
+          const approvalsRef = collection(db, "retake_approvals");
+          const snapshot = await getDocs(approvalsRef);
+          
+          if (snapshot.empty) {
+            alert("No hay reintentos pendientes para reiniciar.");
+            setLoading(false);
+            return;
+          }
+
+          const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+          await Promise.all(deletePromises);
+
+          alert(`¡Éxito! Se han reiniciado ${snapshot.size} reintentos pendientes.`);
+        } catch (error) {
+          console.error("Error reiniciando reintentos:", error);
+          alert("Hubo un error al reiniciar los reintentos pendientes.");
+        } finally {
+          setLoading(false);
+        }
+      }
+    }
+  };
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm p-4 sticky top-0 z-10">
@@ -257,6 +283,22 @@ const AdminDashboard = () => {
               ))}
             </ul>
           )}
+        </div>
+
+        {/* Zona de Mantenimiento */}
+        <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-red-500">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+            <AlertTriangle className="text-red-500" /> Acciones de Mantenimiento
+          </h2>
+          <div className="flex flex-col sm:flex-row justify-between items-center p-4 bg-red-50 rounded-lg border border-red-200">
+            <div>
+              <p className="font-bold text-red-800">Reiniciar Reintentos Globales</p>
+              <p className="text-sm text-red-600">Esta acción eliminará todos los pases de reintento aprobados que aún no han sido utilizados por los alumnos.</p>
+            </div>
+            <button onClick={handleResetAllRetakes} disabled={loading} className="mt-4 sm:mt-0 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition shadow-sm font-medium disabled:bg-red-300">
+              {loading ? 'Procesando...' : 'Reiniciar Todo'}
+            </button>
+          </div>
         </div>
       </main>
     </div>

@@ -41,18 +41,7 @@ export const useExamData = (id) => {
       }
     };
 
-    const consumeRetakeApproval = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      const approvalsRef = collection(db, "retake_approvals");
-      const q = query(approvalsRef, where("studentUid", "==", user.uid), where("examId", "==", id), limit(1));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        await deleteDoc(doc(db, "retake_approvals", snapshot.docs[0].id));
-      }
-    };
-
-    consumeRetakeApproval().then(fetchExam);
+    fetchExam();
   }, [id]);
 
   return { exam, loading };

@@ -129,6 +129,16 @@ const StudentExam = () => {
         timestamp: new Date()
       });
       
+      // --- NUEVO: Consumir el pase de reintento DESPUÉS de guardar el resultado ---
+      const approvalsRef = collection(db, "retake_approvals");
+      const qApprovals = query(approvalsRef, where("studentUid", "==", user.uid), where("examId", "==", id), limit(1));
+      const approvalSnapshot = await getDocs(qApprovals);
+      if (!approvalSnapshot.empty) {
+        // Si encontramos un pase de reintento, lo eliminamos.
+        await deleteDoc(doc(db, "retake_approvals", approvalSnapshot.docs[0].id));
+        console.log("Pase de reintento consumido.");
+      }
+
       // Limpiamos el progreso del examen del localStorage
       clearProgress();
       

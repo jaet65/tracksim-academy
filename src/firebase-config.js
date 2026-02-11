@@ -1,7 +1,7 @@
 // src/firebase-config.js
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, memoryLocalCache } from "firebase/firestore";
 
 // --- IMPORTANTE: REEMPLAZA ESTO CON TUS DATOS REALES DE FIREBASE ---
 // Ve a Project Settings > General > Tus Apps > SDK setup y copia esto:
@@ -18,5 +18,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Exportar servicios
+export const db = initializeFirestore(app, {
+  localCache: memoryLocalCache()
+});
+
 export const auth = getAuth(app);
-export const db = getFirestore(app);

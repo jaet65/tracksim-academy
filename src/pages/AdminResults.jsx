@@ -9,6 +9,8 @@ import { generateConstancia } from '../utils/generateConstancia'; // Para la con
 
 const AdminResults = () => {
   const [results, setResults] = useState([]);
+  const [selectedResults, setSelectedResults] = useState([]); // <-- NUEVO: Para selección múltiple
+  const [pendingApprovals, setPendingApprovals] = useState([]); // <-- NUEVO: Para reintentos pendientes
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
@@ -25,34 +27,41 @@ const AdminResults = () => {
 
   // 1. Cargar resultados desde Firebase
   useEffect(() => {
-    const fetchResults = async () => {
+    const fetchAllData = async () => {
       try {
+        // Cargar resultados
         const resultsRef = collection(db, "results");
-        // Ordenamos por fecha (más reciente primero)
-        // Nota: Si falla el 'orderBy', quítalo temporalmente hasta crear el índice
         const q = query(resultsRef, orderBy("timestamp", "desc")); 
         const snapshot = await getDocs(q);
-        
         const data = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          // Convertimos el Timestamp de Firebase a fecha legible JS
           dateObj: doc.data().timestamp?.toDate() 
         }));
-
         setResults(data);
+
+        // Cargar aprobaciones de reintento PENDIENTES
+        const approvalsRef = collection(db, "retake_approvals");
+        const approvalsSnapshot = await getDocs(approvalsRef);
+        const pending = approvalsSnapshot.docs.map(doc => {
+          const approvalData = doc.data();
+          return `${approvalData.studentUid}_${approvalData.examId}`;
+        });
+        setPendingApprovals(pending);
+
       } catch (error) {
-        console.error("Error cargando resultados:", error);
-        // Fallback si no hay índice creado en Firebase aún
+        console.error("Error cargando datos:", error);
         if (error.code === 'failed-precondition') {
           alert("Nota: Firebase requiere un índice para ordenar por fecha. Revisa la consola.");
+        } else if (error.code === 'permission-denied') {
+          alert("Error de permisos. Asegúrate de que las reglas de seguridad de Firebase permitan a los administradores leer las colecciones 'results' y 'retake_approvals'.");
         }
       } finally {
         setLoading(false);
       }
     };
 
-    fetchResults();
+    fetchAllData();
   }, []);
 
   const handleLogout = async () => {
@@ -98,6 +107,86 @@ const AdminResults = () => {
     }
   };
 
+  // --- NUEVO: Lógica para selección múltiple ---
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedResults(filteredResults.map(r => r.id));
+    } else {
+      setSelectedResults([]);
+    }
+  };
+
+  const handleSelectOne = (e, resultId) => {
+    if (e.target.checked) {
+      setSelectedResults(prev => [...prev, resultId]);
+    } else {
+      setSelectedResults(prev => prev.filter(id => id !== resultId));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (window.confirm(`¿Estás seguro de que quieres eliminar ${selectedResults.length} resultados? Esta acción es irreversible.`)) {
+      try {
+        const deletePromises = selectedResults.map(id => deleteDoc(doc(db, "results", id)));
+        await Promise.all(deletePromises);
+        setResults(prev => prev.filter(r => !selectedResults.includes(r.id)));
+        setSelectedResults([]);
+        alert(`${selectedResults.length} resultados eliminados con éxito.`);
+      } catch (error) {
+        console.error("Error eliminando resultados:", error);
+        alert("No se pudieron eliminar los resultados seleccionados.");
+      }
+    }
+  };
+
+  const handleApproveRetakeSelected = async () => {
+    if (window.confirm(`¿Aprobar un nuevo intento para los ${selectedResults.length} resultados seleccionados?`)) {
+      const approvalsToCreate = [];
+      const alreadyPending = [];
+
+      selectedResults.forEach(id => {
+        const result = results.find(r => r.id === id);
+        if (result) {
+          const isPending = pendingApprovals.includes(`${result.studentUid}_${result.examId}`);
+          if (!isPending) {
+            approvalsToCreate.push(result);
+          } else {
+            alreadyPending.push(result.studentName);
+          }
+        }
+      });
+
+      if (approvalsToCreate.length > 0) {
+        try {
+          const approvalPromises = approvalsToCreate.map(result => {
+          return addDoc(collection(db, "retake_approvals"), {
+            studentUid: result.studentUid,
+            examId: result.examId,
+            approvedAt: new Date(),
+            approvedBy: auth.currentUser?.email || 'admin'
+          });
+          });
+          await Promise.all(approvalPromises);
+
+          const newPending = approvalsToCreate.map(r => `${r.studentUid}_${r.examId}`);
+          setPendingApprovals(prev => [...prev, ...newPending]);
+
+          let alertMessage = `Se aprobaron ${approvalsToCreate.length} nuevos intentos.`;
+          if (alreadyPending.length > 0) {
+            alertMessage += `\nSe omitieron ${alreadyPending.length} porque ya tenían un reintento pendiente.`;
+          }
+          alert(alertMessage);
+
+        } catch (error) {
+          console.error("Error aprobando intentos:", error);
+          alert("No se pudieron aprobar los nuevos intentos.");
+        }
+      } else {
+        alert("No se aprobaron nuevos intentos porque todos los seleccionados ya tenían uno pendiente.");
+      }
+    }
+  };
+
   // 5. Aprobar un nuevo intento
   const handleApproveRetake = async (result) => {
     const { studentUid, examId, studentName, examTitle } = result;
@@ -110,6 +199,8 @@ const AdminResults = () => {
           approvedAt: new Date(),
           approvedBy: auth.currentUser?.email || 'admin'
         });
+        // Actualizamos el estado local para deshabilitar el botón inmediatamente
+        setPendingApprovals(prev => [...prev, `${studentUid}_${examId}`]);
         alert("¡Nuevo intento aprobado! El alumno ya puede realizar el examen de nuevo.");
       } catch (error) {
         console.error("Error aprobando intento:", error);
@@ -152,6 +243,24 @@ const AdminResults = () => {
             />
           </div>
           
+          {/* --- NUEVO: Botones de acciones en lote --- */}
+          {selectedResults.length > 0 && (
+            <div className="flex flex-col md:flex-row gap-2">
+              <button
+                onClick={handleDeleteSelected}
+                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition shadow-sm justify-center"
+              >
+                <Trash2 size={18} /> Eliminar ({selectedResults.length})
+              </button>
+              <button
+                onClick={handleApproveRetakeSelected}
+                className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition shadow-sm justify-center"
+              >
+                <Repeat size={18} /> Aprobar Retoma ({selectedResults.length})
+              </button>
+            </div>
+          )}
+
           <button 
             onClick={exportToCSV}
             className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-sm w-full md:w-auto justify-center"
@@ -166,6 +275,14 @@ const AdminResults = () => {
             <table className="w-full text-left">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="p-4 w-12">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      onChange={handleSelectAll}
+                      checked={filteredResults.length > 0 && selectedResults.length === filteredResults.length}
+                    />
+                  </th>
                   <th className="p-4 font-bold text-gray-600 text-sm">Alumno</th>
                   <th className="p-4 font-bold text-gray-600 text-sm">CURP / Empresa</th>
                   <th className="p-4 font-bold text-gray-600 text-sm">Examen</th>
@@ -177,15 +294,24 @@ const AdminResults = () => {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="5" className="p-8 text-center text-gray-500">Cargando resultados...</td>
+                    <td colSpan="7" className="p-8 text-center text-gray-500">Cargando resultados...</td>
                   </tr>
                 ) : filteredResults.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
+                    <td colSpan="7" className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
                   </tr>
                 ) : (
                   filteredResults.map((r) => (
                     <tr key={r.id} className="hover:bg-blue-50 transition-colors group">
+                      <td className="p-4">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          value={r.id}
+                          checked={selectedResults.includes(r.id)}
+                          onChange={(e) => handleSelectOne(e, r.id)}
+                        />
+                      </td>
                       <td className="p-4 flex items-center gap-2">
                         <div>
                           <div className="font-bold text-gray-800">{r.studentName}</div>
@@ -222,19 +348,16 @@ const AdminResults = () => {
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex justify-end items-center gap-2">
-                          {/* Botón para Constancia (siempre disponible) */}
                           <button
                             onClick={() => {
                               const studentPDFData = { 
                                 studentName: r.studentName,
-                                studentEmail: r.studentEmail || 'No disponible', // Añadimos el email
+                                studentEmail: r.studentEmail || 'No disponible',
                                 studentCurp: r.studentCurp,
                                 studentOccupation: r.studentOccupation,
                                 studentCompany: r.studentCompany
                               };
                               const examPDFData = { examTitle: r.examTitle };
-                              
-                              // Reconstruimos las respuestas incorrectas desde los datos guardados
                               const incorrectAnswers = r.examQuestions
                                 .map((q, index) => ({
                                   question: q.text,
@@ -243,7 +366,6 @@ const AdminResults = () => {
                                   isCorrect: r.studentAnswers[index] === q.correctOption
                                 }))
                                 .filter(item => !item.isCorrect);
-
                               generateConstancia(studentPDFData, examPDFData, r.score, incorrectAnswers);
                             }}
                             className="text-gray-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-100 transition"
@@ -252,7 +374,6 @@ const AdminResults = () => {
                             <FileText size={18} />
                           </button>
 
-                          {/* Botón para DC-3 (solo si aprobó) */}
                           {r.score >= 80 && (
                             <button
                                 onClick={() => {
@@ -275,15 +396,20 @@ const AdminResults = () => {
                                 <Printer size={18} />
                             </button>
                           )}
-                          {/* Botón para Aprobar Retoma */}
-                          <button
-                            onClick={() => handleApproveRetake(r)}
-                            className="text-orange-500 hover:text-orange-700 p-2 rounded-full hover:bg-orange-100 transition"
-                            title="Aprobar un nuevo intento para este alumno"
-                          >
-                            <Repeat size={18} />
-                          </button>
-                          {/* Botón para Eliminar Resultado */}
+                          
+                          {pendingApprovals.includes(`${r.studentUid}_${r.examId}`) ? (
+                            <span className="text-xs font-semibold text-gray-500 bg-gray-200 px-2 py-1 rounded-md" title="Este alumno ya tiene un reintento pendiente para este examen.">
+                              Pendiente
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleApproveRetake(r)}
+                              className="text-orange-500 hover:text-orange-700 p-2 rounded-full hover:bg-orange-100 transition"
+                              title="Aprobar un nuevo intento para este alumno"
+                            >
+                              <Repeat size={18} />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDeleteResult(r.id, r.studentName)}
                             className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition"
@@ -291,7 +417,6 @@ const AdminResults = () => {
                           >
                             <Trash2 size={18} />
                           </button>
-                          
                         </div>
                       </td>
                     </tr>
