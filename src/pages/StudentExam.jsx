@@ -1,39 +1,42 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useBeforeUnload } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
-import { doc, getDoc, addDoc, collection, query, where, getDocs, deleteDoc, limit } from 'firebase/firestore';import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, EyeOff, Maximize, ArrowRight } from 'lucide-react';
+import { doc, getDoc, addDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, EyeOff, Maximize, ArrowRight } from 'lucide-react';
 import logo from '../assets/Logo.png'; // Importamos el logo
 import { generateConstancia } from '../utils/generateConstancia';
 import Confetti from 'react-confetti'; // <-- NUEVO: Importamos el confeti
 import { signOut } from 'firebase/auth'; // Importamos signOut
 
+// --- NUEVO: Importación de Hooks Personalizados ---
+import { useExamData } from '../hooks/useExamData';
+import { useExamProgress } from '../hooks/useExamProgress';
+import { useAntiCheat } from '../hooks/useAntiCheat';
+import { useExamTimer } from '../hooks/useExamTimer';
+
+const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
+
 const StudentExam = () => {
   const { id } = useParams(); // Obtenemos el ID del examen desde la URL
   const navigate = useNavigate();
-  const [exam, setExam] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState({}); // Guardamos { id_pregunta: indice_respuesta }
-  const [timeLeft, setTimeLeft] = useState(45 * 60); // 45 minutos en segundos (Configurable)
+
+  // --- Estados Principales del Componente ---
   const [finished, setFinished] = useState(false);
   const [score, setScore] = useState(0);
   const [attempt, setAttempt] = useState(0); // Estado para guardar el número de intento
   const [timeUp, setTimeUp] = useState(false); // Nuevo estado para controlar si el tiempo se agotó
-
-  // --- NUEVO: Control anti-trampas ---
-  const [visibilityWarnings, setVisibilityWarnings] = useState(0);
-  const [showWarningModal, setShowWarningModal] = useState(false);
   const [terminatedForCheating, setTerminatedForCheating] = useState(false);
-  const [warningCountdown, setWarningCountdown] = useState(30); // <-- Nuevo estado para el cronómetro del modal
   const [showConfirmFinishModal, setShowConfirmFinishModal] = useState(false); // <-- Nuevo estado para el modal de confirmación
-  const [isFullscreen, setIsFullscreen] = useState(document.fullscreenElement != null);
   const [rulesAccepted, setRulesAccepted] = useState(false); // <-- Nuevo estado
   const [showErrorSummary, setShowErrorSummary] = useState(false); // <-- Nuevo estado para mostrar errores
-  const [tickTockSound] = useState(() => {
-    const audio = new Audio('/sounds/tick-tock.mp3');
-    audio.volume = 1.0; // Aseguramos que el volumen esté al máximo (1.0 es el máximo)
-    return audio;
-  }); // <-- NUEVO: Sonido de reloj
+
+  // --- Uso de Hooks Personalizados ---
+  const { exam, loading } = useExamData(id);
+  const { currentQuestionIndex, setCurrentQuestionIndex, answers, handleSelectOption, clearProgress } = useExamProgress(exam, id, finished);
+  const finishExamCallback = useCallback(() => finishExam(true), [exam, answers, finished]); // Memoized callback
+  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, stopSound } = useAntiCheat(rulesAccepted && !finished, finishExamCallback);
+  const onTimeUp = () => { setTimeUp(true); finishExam(); };
+  const { timeLeft, formatTime } = useExamTimer(finished, onTimeUp);
 
   // --- CORRECCIÓN: Mover hooks de confeti al nivel superior ---
   const [windowSize, setWindowSize] = useState({
@@ -44,22 +47,6 @@ const StudentExam = () => {
     setWindowSize({ width: window.innerWidth, height: window.innerHeight });
   }, []);
 
-  const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
-
-  // Helper function to shuffle an array and return the shuffled array along with a map
-  // from new index to original index
-  const shuffleArrayWithMap = (array) => {
-    const shuffledArray = [...array];
-    const originalIndexMap = Array.from({ length: array.length }, (_, i) => i);
-
-    for (let i = shuffledArray.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledArray[i], shuffledArray[j]] = [shuffledArray[j], shuffledArray[i]];
-      [originalIndexMap[i], originalIndexMap[j]] = [originalIndexMap[j], originalIndexMap[i]];
-    }
-    return { shuffledArray, originalIndexMap };
-  };
-
   // --- NUEVO: Bloquear navegación del navegador ---
   useBeforeUnload(useCallback((event) => {
     if (!finished) { // Only prompt if the exam is not finished
@@ -68,222 +55,10 @@ const StudentExam = () => {
     }
   }, [finished]));
 
-  // Clave única para guardar el progreso en localStorage
-  const storageKey = `exam_progress_${auth.currentUser?.uid}_${id}`;
-
-  // 1. Cargar el examen desde Firebase
-  useEffect(() => {
-    const fetchExam = async () => {
-      try {
-        const docRef = doc(db, "exams", id);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const examData = docSnap.data();
-          // Shuffle options for each question
-          const processedQuestions = examData.questions.map(q => {
-            const { shuffledArray, originalIndexMap } = shuffleArrayWithMap(q.options);
-            return {
-              ...q,
-              shuffledOptions: shuffledArray,
-              originalIndexMap: originalIndexMap,
-            };
-          });
-          setExam({ ...examData, questions: processedQuestions }); // Primero cargamos el examen
-        } else {
-          alert("Examen no encontrado");
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Error obteniendo examen:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Consumir el pase de retoma si existe
-    const consumeRetakeApproval = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const approvalsRef = collection(db, "retake_approvals");
-      const q = query(approvalsRef, where("studentUid", "==", user.uid), where("examId", "==", id), limit(1));
-      const snapshot = await getDocs(q);
-
-      if (!snapshot.empty) {
-        const approvalDoc = snapshot.docs[0];
-        await deleteDoc(doc(db, "retake_approvals", approvalDoc.id));
-        console.log("Pase de retoma consumido.");
-      }
-    };
-
-    consumeRetakeApproval();
-    fetchExam();
-  }, [id]);
-
-  // Efecto para restaurar el progreso DESPUÉS de cargar el examen
-  useEffect(() => {
-    if (exam) { // Solo se ejecuta cuando 'exam' ya tiene datos
-      const savedProgressJSON = localStorage.getItem(storageKey);
-      if (savedProgressJSON) {
-        const savedProgress = JSON.parse(savedProgressJSON);
-        setAnswers(savedProgress.answers || {});
-        setCurrentQuestionIndex(savedProgress.currentQuestionIndex || 0);
-        setTimeLeft(savedProgress.timeLeft || 45 * 60);
-      }
-      // Marcamos la carga como finalizada aquí
-      setLoading(false);
-    }
-  }, [exam, storageKey]); // Depende de 'exam'
-
-  // 2. Lógica del Cronómetro
-  useEffect(() => {
-    if (!exam || finished) return;
-    
-    // Si el tiempo llega a 0, finalizamos
-    if (timeLeft <= 0) {
-      setTimeUp(true); // Marcamos que el tiempo se agotó
-      finishExam();
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft, exam, finished]);
-
-  // --- NUEVO: Efecto para detectar cambio de pestaña ---
-  useEffect(() => {
-    // Solo se ejecuta si el examen ha comenzado y no ha terminado.
-    if (!rulesAccepted || finished) return;
-
-    const handleFocusLoss = () => {
-      // No actuar si el modal ya está visible o el examen terminó
-      if (showWarningModal || finished) {
-        return;
-      }
-
-      const newCount = visibilityWarnings + 1;
-      console.log(`Advertencia de visibilidad #${newCount}`); // <-- Log solicitado
-      setVisibilityWarnings(newCount);
-
-      if (newCount > MAX_VISIBILITY_WARNINGS) {
-        setTerminatedForCheating(true);
-        finishExam();
-      } else {
-        setWarningCountdown(30); // Reiniciamos el contador
-        setShowWarningModal(true); // <-- Activamos el modal
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        handleFocusLoss();
-      }
-    };
-
-    const handleFullscreenChange = () => { // This is the key condition
-      const isCurrentlyFullscreen = document.fullscreenElement != null;
-      setIsFullscreen(isCurrentlyFullscreen);
-      if (!isCurrentlyFullscreen && rulesAccepted && !finished) {
-        handleFocusLoss(); // If exits fullscreen, count as a warning.
-      }
-    };
-
-    // Escuchamos tanto el cambio de pestaña como la pérdida de foco de la ventana
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("blur", handleFocusLoss);
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleFocusLoss);
-      document.removeEventListener('fullscreenchange', handleFullscreenChange); // Clean up event listener
-    };
-  }, [finished, rulesAccepted, exam, visibilityWarnings, showWarningModal]); // Dependencias actualizadas
-
-  // --- NUEVO: Efecto para el cronómetro del modal de advertencia ---
-  useEffect(() => { // Efecto para el sonido
-    if (showWarningModal) {
-      tickTockSound.loop = true; // Para que el sonido se repita
-      tickTockSound.play().catch(e => console.error("Error al reproducir sonido:", e));
-    } else {
-      tickTockSound.pause();
-      tickTockSound.currentTime = 0;
-    }
-
-    // Función de limpieza para detener el sonido
-    return () => {
-      tickTockSound.pause();
-      tickTockSound.currentTime = 0;
-    };
-  }, [showWarningModal, tickTockSound]);
-
-  useEffect(() => { // Efecto para el contador
-    if (!showWarningModal) return;
-
-    if (warningCountdown <= 0) {
-      setTerminatedForCheating(true);
-      finishExam();
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setWarningCountdown(prev => prev - 1);
-    }, 1000);
-
-    // Limpiamos el intervalo y reseteamos la velocidad del sonido
-    return () => {
-      clearInterval(timer);
-      tickTockSound.playbackRate = 1.0;
-    };
-  }, [showWarningModal, warningCountdown, tickTockSound]);
-
-
-  // Efecto para guardar el progreso en localStorage
-  useEffect(() => {
-    // Solo guardamos si el examen ha cargado y no ha finalizado
-    if (exam && !finished) {
-      // Store the original index of the selected option
-      const progress = {
-        currentQuestionIndex,
-        answers,
-        timeLeft,
-      };
-      localStorage.setItem(storageKey, JSON.stringify(progress));
-    }
-  }, [currentQuestionIndex, answers, timeLeft, exam, finished, storageKey]);
-
-  // Formato de tiempo MM:SS
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  // 3. Manejar selección de respuesta
-  const handleSelectOption = (optionIndex) => {
-    const question = exam.questions[currentQuestionIndex];
-    setAnswers({
-      ...answers,
-      [currentQuestionIndex]: question.originalIndexMap[optionIndex] // Store the ORIGINAL index
-    });
-  };
-
   // 4. Finalizar y Calificar
-  const finishExam = async () => {
-    // --- CORRECCIÓN ---
-    // Añadimos una guarda para evitar errores si el examen aún no ha cargado.
-    // Y otra para evitar que se ejecute múltiples veces.
+  const finishExam = useCallback(async (isCheating = false) => {
     if (!exam || finished) {
-      // Si se intenta finalizar de nuevo, nos aseguramos de que el sonido se detenga.
-      tickTockSound.pause();
-      tickTockSound.currentTime = 0;
-
-      setShowConfirmFinishModal(false);
-      console.warn("Se intentó finalizar un examen que aún no se había cargado.");
-      setShowWarningModal(false); // Aseguramos que el modal de advertencia se cierre
+      stopSound();
       return;
     }
 
@@ -291,6 +66,7 @@ const StudentExam = () => {
     setShowWarningModal(false);
     setShowConfirmFinishModal(false);
 
+    if (isCheating) setTerminatedForCheating(true);
     // Calculamos la nota
     let correctCount = 0;
     exam.questions.forEach((q, index) => {
@@ -354,19 +130,14 @@ const StudentExam = () => {
       });
       
       // Limpiamos el progreso del examen del localStorage
-      localStorage.removeItem(storageKey);
+      clearProgress();
       
     } catch (e) {
       console.error("Error guardando resultado", e);
     } finally {
     }
-  };
+  }, [exam, finished, answers, id, clearProgress, stopSound, setShowWarningModal]);
 
-  const requestFullscreen = () => {
-    document.documentElement.requestFullscreen().catch(err => {
-      alert(`Error al entrar en pantalla completa: ${err.message}. Por favor, habilita los permisos.`);
-    });
-  };
 
   const handleAcceptRulesAndFullscreen = () => {
     requestFullscreen();
@@ -398,7 +169,7 @@ const StudentExam = () => {
               <EyeOff className="w-7 h-7 text-red-500 mt-1 flex-shrink-0" />
               <div>
                 <h3 className="font-bold text-lg">No Salir de la Pantalla</h3>
-                <p className="text-gray-500">El examen debe realizarse en pantalla completa. Si sales de la pestaña o minimizas la ventana, recibirás una advertencia. Después de <strong>{MAX_VISIBILITY_WARNINGS} advertencias</strong>, el examen finalizará automáticamente.</p>
+                <p className="text-gray-500">El examen debe realizarse en pantalla completa. Si sales de la pestaña o minimizas la ventana, recibirás una advertencia. Después de <strong>2 advertencias</strong>, el examen finalizará automáticamente.</p>
               </div>
             </li>
           </ul>
@@ -614,7 +385,7 @@ const StudentExam = () => {
           <h2 className="text-4xl font-bold mb-4">¡ADVERTENCIA!</h2>
           <p className="text-xl mb-2">Has salido de la ventana del examen.</p>
           <p className="text-lg mb-8">Permanecer en esta página es obligatorio. Si sales de nuevo, el examen podría finalizarse.</p>
-          <div className="mb-10">
+          <div className="mb-10 text-white">
             <p className="font-bold text-2xl">Advertencia {visibilityWarnings} de {MAX_VISIBILITY_WARNINGS}</p>
             <div className="mt-4 bg-red bg-opacity-10 p-4 rounded-lg animate-pulse">
               <p className="text-yellow-300 text-lg">Volver al examen o se cerrará en:</p>
@@ -642,7 +413,7 @@ const StudentExam = () => {
               No, continuar
             </button>
             <button 
-              onClick={finishExam} 
+              onClick={() => finishExam()} 
               className="px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 font-bold"
             >
               Sí, finalizar
