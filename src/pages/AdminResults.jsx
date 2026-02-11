@@ -13,6 +13,8 @@ const AdminResults = () => {
   const [pendingApprovals, setPendingApprovals] = useState([]); // <-- NUEVO: Para reintentos pendientes
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1); // <-- NUEVO: Para paginación
+  const [resultsPerPage] = useState(20); // <-- NUEVO: Resultados por página
   const navigate = useNavigate();
   const location = useLocation(); // <-- NUEVO: Para leer la URL
 
@@ -76,6 +78,15 @@ const AdminResults = () => {
     r.examTitle?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // --- NUEVO: Lógica de paginación ---
+  const indexOfLastResult = currentPage * resultsPerPage;
+  const indexOfFirstResult = indexOfLastResult - resultsPerPage;
+  const currentResults = filteredResults.slice(indexOfFirstResult, indexOfLastResult);
+  const totalPages = Math.ceil(filteredResults.length / resultsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+
   // 3. Exportar a CSV (Excel simple)
   const exportToCSV = () => {
     const headers = ["Nombre,CURP,Empresa,Examen,Calificacion,Fecha"];
@@ -110,7 +121,8 @@ const AdminResults = () => {
   // --- NUEVO: Lógica para selección múltiple ---
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedResults(filteredResults.map(r => r.id));
+      // Selecciona solo los resultados de la página actual
+      setSelectedResults(currentResults.map(r => r.id));
     } else {
       setSelectedResults([]);
     }
@@ -276,7 +288,7 @@ const AdminResults = () => {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="p-4 w-12">
-                    <input
+                    <input // La casilla "seleccionar todo" ahora solo afecta a la página actual
                       type="checkbox"
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       onChange={handleSelectAll}
@@ -301,7 +313,7 @@ const AdminResults = () => {
                     <td colSpan="7" className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
                   </tr>
                 ) : (
-                  filteredResults.map((r) => (
+                  currentResults.map((r) => (
                     <tr key={r.id} className="hover:bg-blue-50 transition-colors group">
                       <td className="p-4">
                         <input
@@ -425,6 +437,30 @@ const AdminResults = () => {
               </tbody>
             </table>
           </div>
+          {/* --- NUEVO: Controles de Paginación --- */}
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center p-4 bg-white border-t border-gray-200">
+              <span className="text-sm text-gray-600">
+                Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                <button
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
