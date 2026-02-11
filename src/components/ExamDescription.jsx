@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { BookText, ArrowRight, Clock } from 'lucide-react';
+import { BookText, ArrowRight, Clock, CheckCircle } from 'lucide-react';
+import { useButtonCountdown } from '../hooks/useButtonCountdown'; // <-- NUEVO: Importamos el hook
 
 // La lógica para generar el resumen se encapsula aquí.
 const generateExamSummary = (questions) => {
@@ -87,8 +88,7 @@ const generateExamSummary = (questions) => {
 
 const ExamDescription = ({ exam, onAccept, onCancel }) => {
   const [summary, setSummary] = useState({ title: "Descripción de la Evaluación", description: "Cargando análisis del contenido..." });
-  const [countdown, setCountdown] = useState(5); // <-- NUEVO: Estado para la cuenta regresiva
-  const [isButtonDisabled, setIsButtonDisabled] = useState(true); // <-- NUEVO: Estado para deshabilitar el botón
+  const { countdown, isButtonDisabled, showCheckAnimation } = useButtonCountdown(3); // <-- NUEVO: Usamos el hook
 
   useEffect(() => {
     if (exam) {
@@ -105,18 +105,6 @@ const ExamDescription = ({ exam, onAccept, onCancel }) => {
     }
   }, [exam]);
 
-  // --- NUEVO: useEffect para la cuenta regresiva del botón ---
-  useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => {
-        setCountdown(countdown - 1);
-      }, 1000);
-      return () => clearTimeout(timer); // Limpiamos el temporizador si el componente se desmonta
-    } else {
-      setIsButtonDisabled(false); // Habilitamos el botón cuando la cuenta llega a 0
-    }
-  }, [countdown]);
-
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full text-center">
@@ -127,10 +115,15 @@ const ExamDescription = ({ exam, onAccept, onCancel }) => {
         <button 
           onClick={onAccept} 
           disabled={isButtonDisabled}
-          className="w-full bg-blue-600 text-white py-4 rounded-lg hover:bg-blue-700 transition shadow-lg font-bold text-lg flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-wait"
+          className="w-full bg-blue-600 text-white py-4 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-lg font-bold text-lg flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-wait"
         >
-          {isButtonDisabled ? <><Clock size={20} /> {`Continuar en ${countdown}...`}</> 
-          : <>Entendido, continuar a las reglas <ArrowRight size={20} /></>}
+          {countdown > 0 ? (
+            <><Clock size={20} /> {`Continuar en ${countdown}...`}</>
+          ) : showCheckAnimation ? (
+            <CheckCircle size={20} className="animate-ping" />
+          ) : (
+            <>Entendido, continuar a las reglas <ArrowRight size={20} /></>
+          )}
         </button>
         <button onClick={onCancel} className="mt-4 w-full text-center text-sm text-gray-500 hover:text-gray-700 transition font-medium">
           Cancelar y volver al portal
