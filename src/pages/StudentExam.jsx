@@ -33,8 +33,7 @@ const StudentExam = () => {
   // --- Uso de Hooks Personalizados ---
   const { exam, loading } = useExamData(id);
   const { currentQuestionIndex, setCurrentQuestionIndex, answers, handleSelectOption, clearProgress } = useExamProgress(exam, id, finished);
-  const finishExamCallback = useCallback(() => finishExam(true), [exam, answers, finished]); // Memoized callback
-  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, stopSound } = useAntiCheat(rulesAccepted && !finished, finishExamCallback);
+  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound } = useAntiCheat(rulesAccepted && !finished, () => finishExam(true));
   const onTimeUp = () => { setTimeUp(true); finishExam(); };
   const { timeLeft, formatTime } = useExamTimer(finished, onTimeUp);
 
@@ -61,6 +60,10 @@ const StudentExam = () => {
       stopSound();
       return;
     }
+
+    // --- CORRECCIÓN: Salir de pantalla completa ---
+    setFinished(true); // Marcar como finalizado PRIMERO
+    exitFullscreen(); // Luego salir de pantalla completa
 
     // Detenemos el sonido y cerramos el modal de advertencia ANTES de hacer el resto.
     setShowWarningModal(false);
@@ -96,7 +99,6 @@ const StudentExam = () => {
 
       setScore(finalScore);
       setAttempt(attemptNumber); // Guardamos el intento en el estado
-      setFinished(true);
 
       console.log(`Guardando intento #${attemptNumber} para el examen "${exam.title}"...`);
 
@@ -137,7 +139,7 @@ const StudentExam = () => {
       console.error("Error guardando resultado", e);
     } finally {
     }
-  }, [exam, finished, answers, id, clearProgress, stopSound, setShowWarningModal]);
+  }, [exam, finished, answers, id, clearProgress, stopSound, setShowWarningModal, exitFullscreen]);
 
 
   const handleAcceptRulesAndFullscreen = () => {

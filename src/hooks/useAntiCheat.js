@@ -19,6 +19,12 @@ export const useAntiCheat = (isExamActive, onCheatDetected) => {
     });
   }, []);
 
+  const exitFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    }
+  }, []);
+
   useEffect(() => {
     if (!isExamActive) return;
 
@@ -40,7 +46,8 @@ export const useAntiCheat = (isExamActive, onCheatDetected) => {
     const handleFullscreenChange = () => {
       const isCurrentlyFullscreen = document.fullscreenElement != null;
       setIsFullscreen(isCurrentlyFullscreen);
-      if (!isCurrentlyFullscreen) handleFocusLoss();
+      // --- CORRECCIÓN: No contar como trampa si el examen ya terminó ---
+      if (!isCurrentlyFullscreen && isExamActive) handleFocusLoss();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -79,5 +86,5 @@ export const useAntiCheat = (isExamActive, onCheatDetected) => {
     tickTockSound.currentTime = 0;
   }, [tickTockSound]);
 
-  return { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, stopSound };
+  return { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound };
 };
