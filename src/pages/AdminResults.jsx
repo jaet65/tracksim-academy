@@ -4,6 +4,7 @@ import { db, auth } from '../firebase-config';
 import { collection, getDocs, orderBy, query, doc, deleteDoc, addDoc, writeBatch, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat, Upload, Loader } from 'lucide-react';
+import { formatTime } from '../utils/timeUtils'; // Import utility formatTime
 import { generateDC3 } from '../utils/generateDC3'; // Para el formato oficial
 import { generateConstancia } from '../utils/generateConstancia'; // Para la constancia con errores
 import Papa from 'papaparse';
@@ -95,7 +96,7 @@ const AdminResults = () => {
 
   // 3. Exportar a CSV (Excel simple)
   const exportToCSV = (filterType) => {
-    const headers = ["Nombre,CURP,Empresa,Examen,Calificacion,Nota Simulador,Fecha"];
+    const headers = ["Nombre,CURP,Empresa,Examen,Calificacion,Nota Simulador,Tiempo Ocupado,Fecha"];
 
     // Primero, filtramos los resultados según el criterio de búsqueda actual
     let resultsToProcess = filteredResults;
@@ -117,7 +118,7 @@ const AdminResults = () => {
     });
 
     const rows = latestResults.map(r =>
-      `"${r.studentName}","${r.studentCurp}","${r.studentCompany}","${r.examTitle}","${r.score}","${r.simulatorScore !== undefined ? r.simulatorScore : 'TBD'}","${r.dateObj?.toLocaleDateString()}"`
+      `"${r.studentName}","${r.studentCurp}","${r.studentCompany}","${r.examTitle}","${r.score}","${r.simulatorScore !== undefined ? r.simulatorScore : 'TBD'}","${r.timeTaken !== undefined ? formatTime(r.timeTaken) : 'N/A'}","${r.dateObj?.toLocaleDateString()}"`
     );
     
     const csvContent = "data:text/csv;charset=utf-8," + headers.concat(rows).join("\n");
@@ -440,6 +441,7 @@ const AdminResults = () => {
                   <th className="p-4 font-bold text-gray-600 text-sm">Nombre Examen</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Examen</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Simulador</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Tiempo Ocupado</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Fecha</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Acciones</th>
                 </tr>
@@ -447,11 +449,11 @@ const AdminResults = () => {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="8" className="p-8 text-center text-gray-500">Cargando resultados...</td>
+                    <td colSpan="9" className="p-8 text-center text-gray-500">Cargando resultados...</td>
                   </tr>
                 ) : filteredResults.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
+                    <td colSpan="9" className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
                   </tr>
                 ) : (
                   currentResults.map((r) => (
@@ -499,6 +501,13 @@ const AdminResults = () => {
                           <span className="px-3 py-1 rounded-full text-sm font-bold bg-purple-100 text-purple-700">{r.simulatorScore}</span>
                         ) : (
                           <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-500">TBD</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-center">
+                        {r.timeTaken !== undefined ? (
+                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-700">{formatTime(r.timeTaken)}</span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-500">N/A</span>
                         )}
                       </td>
                       <td className="p-4 text-right text-sm text-gray-500">

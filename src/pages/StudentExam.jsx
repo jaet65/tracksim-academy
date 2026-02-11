@@ -12,10 +12,12 @@ import { signOut } from 'firebase/auth'; // Importamos signOut
 import { useExamData } from '../hooks/useExamData';
 import { useExamProgress } from '../hooks/useExamProgress';
 import { useAntiCheat } from '../hooks/useAntiCheat';
-import { useExamTimer } from '../hooks/useExamTimer';
+import { useExamTimer } from '../hooks/useExamTimer'; // Assuming this hook will be modified to accept initial time
+import { formatTime as formatTimeUtil } from '../utils/timeUtils'; // Import utility formatTime
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 
+const EXAM_DURATION_SECONDS = 60 * 60; // 60 minutes
 const StudentExam = () => {
   const { id } = useParams(); // Obtenemos el ID del examen desde la URL
   const navigate = useNavigate();
@@ -29,13 +31,14 @@ const StudentExam = () => {
   const [showConfirmFinishModal, setShowConfirmFinishModal] = useState(false); // <-- Nuevo estado para el modal de confirmación
   const [rulesAccepted, setRulesAccepted] = useState(false); // <-- Nuevo estado
   const [showErrorSummary, setShowErrorSummary] = useState(false); // <-- Nuevo estado para mostrar errores
+  const [displayTimeTaken, setDisplayTimeTaken] = useState(0); // New state to store time taken for display
 
   // --- Uso de Hooks Personalizados ---
   const { exam, loading } = useExamData(id);
   const { currentQuestionIndex, setCurrentQuestionIndex, answers, handleSelectOption, clearProgress } = useExamProgress(exam, id, finished);
   const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound } = useAntiCheat(rulesAccepted && !finished, () => finishExam(true));
   const onTimeUp = () => { setTimeUp(true); finishExam(); };
-  const { timeLeft, formatTime } = useExamTimer(finished, onTimeUp);
+  const { timeLeft, formatTime, initialTimeInSeconds } = useExamTimer(finished, onTimeUp, EXAM_DURATION_SECONDS); // Pass duration and get it back
 
   // --- CORRECCIÓN: Mover hooks de confeti al nivel superior ---
   const [windowSize, setWindowSize] = useState({
@@ -64,6 +67,10 @@ const StudentExam = () => {
     // --- CORRECCIÓN: Salir de pantalla completa ---
     setFinished(true); // Marcar como finalizado PRIMERO
     exitFullscreen(); // Luego salir de pantalla completa
+
+    // Calculate time taken
+    const timeTakenInSeconds = initialTimeInSeconds - timeLeft; // Calculate time taken
+    setDisplayTimeTaken(timeTakenInSeconds); // Store for display
 
     // Detenemos el sonido y cerramos el modal de advertencia ANTES de hacer el resto.
     setShowWarningModal(false);
@@ -128,6 +135,7 @@ const StudentExam = () => {
         examQuestions: exam.questions,
         correctAnswers: correctCount,
         approved: finalScore >= 60, // Puedes definir aquí la nota aprobatoria (ej. 8.0)
+        timeTaken: timeTakenInSeconds, // Store time taken
         
         timestamp: new Date()
       });
@@ -138,8 +146,8 @@ const StudentExam = () => {
     } catch (e) {
       console.error("Error guardando resultado", e);
     } finally {
-    }
-  }, [exam, finished, answers, id, clearProgress, stopSound, setShowWarningModal, exitFullscreen]);
+    } // Add timeLeft and initialTimeInSeconds to dependencies
+  }, [exam, finished, answers, id, clearProgress, stopSound, setShowWarningModal, exitFullscreen, timeLeft, initialTimeInSeconds]);
 
 
   const handleAcceptRulesAndFullscreen = () => {
@@ -323,6 +331,15 @@ const StudentExam = () => {
             Mínimo aprobatorio: 60/100
           </p>
           
+          {displayTimeTaken > 0 && (
+            <div className="text-center mb-6">
+              <span className="inline-block bg-blue-100 text-blue-700 text-sm font-bold px-3 py-1 rounded-full">
+                Tiempo ocupado: {formatTime(displayTimeTaken)}
+              </span>
+            </div>
+          )}
+
+
           {attempt > 0 && (
             <div className="text-center">
               <span className="inline-block bg-gray-100 text-gray-500 text-xs font-bold px-3 py-1 rounded-full mb-6">

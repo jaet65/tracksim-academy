@@ -4,6 +4,7 @@ import { auth, db } from '../firebase-config';
 import { collection, getDocs, orderBy, query, where, doc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { LogOut, ArrowLeft, FileText, Loader, Award } from 'lucide-react';
+import { formatTime } from '../utils/timeUtils'; // Import utility formatTime
 import { generateConstancia } from '../utils/generateConstancia';
 
 const StudentResults = () => {
@@ -131,6 +132,7 @@ const StudentResults = () => {
                 <tr>
                   <th className="p-4 font-bold text-gray-600 text-sm">Examen</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Tiempo Ocupado</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Fecha</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Acciones</th>
                 </tr>
@@ -157,6 +159,13 @@ const StudentResults = () => {
                         }`}>
                           {r.score}
                         </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        {r.timeTaken !== undefined ? (
+                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-700">{formatTime(r.timeTaken)}</span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-500">N/A</span>
+                        )}
                       </td>
                       <td className="p-4 text-right text-sm text-gray-500">
                         {r.dateObj?.toLocaleDateString()}
