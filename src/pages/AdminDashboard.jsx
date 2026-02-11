@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
-import { signOut } from 'firebase/auth';
-import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query, updateDoc } from 'firebase/firestore';
 import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download } from 'lucide-react';
 import { Pie } from 'react-chartjs-2';
 import {
@@ -21,6 +20,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tool
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [examTitle, setExamTitle] = useState(''); // Estado para el nombre del examen
+  const [examDuration, setExamDuration] = useState(45); // <-- NUEVO: Estado para la duración
   const [exams, setExams] = useState([]);
   const [loadingExams, setLoadingExams] = useState(true);
   const [chartData, setChartData] = useState(null);
@@ -29,6 +29,7 @@ const AdminDashboard = () => {
   const [selectedExamFilter, setSelectedExamFilter] = useState('all');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState('all');
   const [loadingChart, setLoadingChart] = useState(true);
+  const [editingExamId, setEditingExamId] = useState(null); // <-- NUEVO: Para edición en línea
   const chartRef = useRef(null);
   const navigate = useNavigate();
 
@@ -199,6 +200,7 @@ const AdminDashboard = () => {
           // 2. USAR EL NOMBRE PERSONALIZADO
           const examData = {
             title: examTitle.trim(), // <--- Aquí usamos lo que escribiste
+            duration: Number(examDuration), // <-- NUEVO: Guardamos la duración en minutos
             createdAt: new Date(),
             totalQuestions: questions.length,
             questions: questions
@@ -210,6 +212,7 @@ const AdminDashboard = () => {
           
           // Limpiar formulario
           setExamTitle('');
+          setExamDuration(45);
           e.target.value = null;
           fetchExams(); // Recargar la lista de exámenes
 
@@ -238,6 +241,24 @@ const AdminDashboard = () => {
         console.error("Error eliminando examen: ", error);
         alert("Hubo un error al eliminar el examen.");
       }
+    }
+  };
+
+  // --- NUEVO: Guardar cambios en un examen existente (duración) ---
+  const handleSaveExamChanges = async (examId) => {
+    const examToUpdate = exams.find(e => e.id === examId);
+    if (!examToUpdate) return;
+
+    try {
+      const examRef = doc(db, "exams", examId);
+      await updateDoc(examRef, {
+        duration: Number(examToUpdate.duration)
+      });
+      alert(`Duración del examen "${examToUpdate.title}" actualizada.`);
+      setEditingExamId(null); // Salir del modo edición
+    } catch (error) {
+      console.error("Error actualizando examen:", error);
+      alert("Hubo un error al guardar los cambios.");
     }
   };
 
@@ -316,19 +337,36 @@ const AdminDashboard = () => {
           </p>
 
           {/* NUEVO: Input para el Título */}
-          <div className="max-w-md mx-auto mb-8 text-left">
-            <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
-              Nombre del Examen
-            </label>
-            <div className="relative">
-              <Type className="absolute top-3 left-3 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Ej. Seguridad en Alturas - Nivel 1"
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                value={examTitle}
-                onChange={(e) => setExamTitle(e.target.value)}
-              />
+          <div className="max-w-md mx-auto mb-8 text-left grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
+                Nombre del Examen
+              </label>
+              <div className="relative">
+                <Type className="absolute top-3 left-3 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Ej. Seguridad en Alturas - Nivel 1"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  value={examTitle}
+                  onChange={(e) => setExamTitle(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
+                Duración (min)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="45"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  value={examDuration}
+                  onChange={(e) => setExamDuration(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 
@@ -382,13 +420,39 @@ const AdminDashboard = () => {
           ) : (
             <ul className="space-y-3">
               {exams.map(exam => (
-                <li key={exam.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-                  <div>
+                <li key={exam.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                  <div className="flex justify-between items-start">
+                    <div>
                     <p className="font-bold text-gray-800">{exam.title}</p>
-                    <p className="text-xs text-gray-500">
-                      {exam.totalQuestions} preguntas - Creado el {new Date(exam.createdAt.seconds * 1000).toLocaleDateString()}
-                    </p>
-                  </div>
+                      <p className="text-xs text-gray-500">
+                        {exam.totalQuestions} preguntas - Creado el {new Date(exam.createdAt.seconds * 1000).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {editingExamId === exam.id ? (
+                        <>
+                          <input
+                            type="number"
+                            value={exam.duration || 45}
+                            onChange={(e) => setExams(exams.map(ex => ex.id === exam.id ? { ...ex, duration: e.target.value } : ex))}
+                            className="w-20 text-center border-gray-300 rounded-md"
+                          />
+                          <button onClick={() => handleSaveExamChanges(exam.id)} className="text-green-600 p-2 rounded-full hover:bg-green-100">Guardar</button>
+                          <button onClick={() => setEditingExamId(null)} className="text-gray-500 p-2 rounded-full hover:bg-gray-200">X</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-sm font-medium text-gray-600 bg-gray-200 px-2 py-1 rounded-md">{exam.duration || 'N/A'} min</span>
+                          <button onClick={() => setEditingExamId(exam.id)} className="text-blue-600 p-2 rounded-full hover:bg-blue-100">Editar</button>
+                          <button
+                            onClick={() => handleDeleteExam(exam.id, exam.title)}
+                            className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors"
+                            title="Eliminar examen"
+                          ><Trash2 size={20} /></button>
+                        </>
+                      )}
+                    </div>
+                  </div>                  
                   <button
                     onClick={() => handleDeleteExam(exam.id, exam.title)}
                     className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors"

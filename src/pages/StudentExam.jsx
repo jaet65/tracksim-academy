@@ -17,7 +17,6 @@ import { formatTime as formatTimeUtil } from '../utils/timeUtils'; // Import uti
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 
-const EXAM_DURATION_SECONDS = 45 * 60; // 60 minutes
 const StudentExam = () => {
   const { id } = useParams(); // Obtenemos el ID del examen desde la URL
   const navigate = useNavigate();
@@ -36,10 +35,16 @@ const StudentExam = () => {
   // --- Uso de Hooks Personalizados ---
   const { exam, loading } = useExamData(id);
   const { currentQuestionIndex, setCurrentQuestionIndex, answers, handleSelectOption, clearProgress } = useExamProgress(exam, id, finished);
-  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound } = useAntiCheat(rulesAccepted && !finished, () => finishExam(true));
-  const onTimeUp = () => { setTimeUp(true); finishExam(); };
-  const { timeLeft, formatTime, initialTimeInSeconds } = useExamTimer(finished, onTimeUp, EXAM_DURATION_SECONDS); // Pass duration and get it back
+  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound } = useAntiCheat(rulesAccepted && !finished, () => finishExam(true));  // --- NUEVO: Duración dinámica del examen ---
+  const examDurationInSeconds = exam?.duration ? exam.duration * 60 : 45 * 60;
 
+  const onTimeUp = () => { setTimeUp(true); finishExam(); };
+  // Pasamos la duración dinámica al hook del temporizador
+  const { timeLeft, formatTime, initialTimeInSeconds } = useExamTimer(finished || loading || !rulesAccepted, onTimeUp, examDurationInSeconds);
+
+  // --- DEBUG: Console logs para verificar el flujo de datos (eliminados) ---
+  
+  
   // --- CORRECCIÓN: Mover hooks de confeti al nivel superior ---
   const [windowSize, setWindowSize] = useState({
     width: window.innerWidth,
@@ -157,6 +162,16 @@ const StudentExam = () => {
 
   if (loading) return <div className="p-10 text-center">Cargando examen...</div>;
   if (!exam) return <div className="p-10 text-center text-red-600">No se encontró el examen.</div>;
+  // --- CORRECCIÓN: No renderizar nada hasta que el examen esté completamente cargado ---
+  // Esto asegura que `exam.duration` siempre tenga un valor antes de que se inicialice el temporizador.
+  if (loading || !exam) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center text-gray-500">Cargando examen...</div>
+      </div>
+    );
+  }
+  if (!exam) return <div className="p-10 text-center text-red-600">Error: No se pudo cargar el examen.</div>;
 
   // --- NUEVO: Pantalla de Reglas ---
   if (!rulesAccepted) {
@@ -173,7 +188,7 @@ const StudentExam = () => {
               <Clock className="w-7 h-7 text-blue-500 mt-1 flex-shrink-0" />
               <div>
                 <h3 className="font-bold text-lg">Tiempo Límite</h3>
-                <p className="text-gray-500">Tienes <strong>{EXAM_DURATION_SECONDS / 60} minutos</strong> para completar el examen. El temporizador no se detendrá una vez que comience.</p>
+                <p className="text-gray-500">Tienes <strong>{examDurationInSeconds / 60} minutos</strong> para completar el examen. El temporizador no se detendrá una vez que comience.</p>
               </div>
             </li>
             <li className="flex items-start gap-4">
