@@ -78,6 +78,7 @@ const StudentResults = () => {
       studentCurp: userData.curp,
       studentOccupation: userData.occupation,
       studentCompany: userData.company,
+      studentCompanyRfc: userData.companyRfc,
     };
 
     const examPDFData = { examTitle: result.examTitle };

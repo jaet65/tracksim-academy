@@ -202,6 +202,15 @@ const RetakeApprovalModal = ({ user, onClose }) => {
     fetchUserData();
   }, [user.id]);
 
+  // --- CORRECCIÓN: Función para refrescar el estado de los pases ---
+  const refreshPendingApprovals = async () => {
+    const approvalsRef = collection(db, "retake_approvals");
+    const qApprovals = query(approvalsRef, where("studentUid", "==", user.id));
+    const approvalsSnapshot = await getDocs(qApprovals);
+    const uniquePendingExamIds = Array.from(new Set(approvalsSnapshot.docs.map(doc => doc.data().examId)));
+    setPendingApprovals(uniquePendingExamIds);
+  };
+
   const handleApproveRetake = async (result) => {
     if (window.confirm(`¿Aprobar un nuevo intento para ${user.fullName} en el examen "${result.examTitle}"?`)) {
       try {
@@ -223,7 +232,12 @@ const RetakeApprovalModal = ({ user, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full">
+      {/* --- CORRECCIÓN: Al hacer clic fuera, se refresca el estado --- */}
+      <div 
+        className="absolute inset-0" 
+        onClick={onClose}
+      ></div>
+      <div className="relative bg-white rounded-lg shadow-xl p-6 max-w-lg w-full">
         <div className="flex justify-between items-center mb-4">
           <div>
             <h2 className="text-xl font-bold">Aprobar Nuevo Intento</h2>
@@ -231,6 +245,12 @@ const RetakeApprovalModal = ({ user, onClose }) => {
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full">
             <X size={24} />
+          </button>
+        </div>
+
+        <div className="text-right mb-2">
+          <button onClick={refreshPendingApprovals} className="text-xs text-blue-600 hover:underline">
+            Refrescar estado
           </button>
         </div>
 

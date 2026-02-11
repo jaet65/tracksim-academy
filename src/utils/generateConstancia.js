@@ -42,31 +42,44 @@ export const generateConstancia = (studentData, examData, score, incorrectAnswer
   const occupationLines = occupationText.length;
   let yOffset = (occupationLines > 1) ? (occupationLines - 1) * 5 : 0; // 5mm de espacio por línea extra
 
+  let currentY = 68 + yOffset;
+
   doc.setFont("helvetica", "normal");
-  doc.text(`Empresa:`, 50, 68 + yOffset);
+  doc.text(`Empresa:`, 50, currentY);
   doc.setFont("helvetica", "bold");
-  doc.text(studentData.studentCompany || "N/A", 95, 68 + yOffset);
+  doc.text(studentData.studentCompany || "N/A", 95, currentY);
+  currentY += 7;
+
+  doc.setFont("helvetica", "normal");
+  doc.text(`RFC Empresa:`, 50, currentY);
+  doc.setFont("helvetica", "bold");
+  doc.text(studentData.studentCompanyRfc || "N/A", 95, currentY);
+  currentY += 7;
 
   // Separador
   doc.setDrawColor(200, 200, 200);
-  doc.line(50, 75 + yOffset, 200, 75 + yOffset);
+  doc.line(50, currentY, 200, currentY);
+  currentY += 7;
 
   doc.setFont("helvetica", "normal");
-  doc.text(`Evaluación:`, 50, 82 + yOffset);
+  doc.text(`Evaluación:`, 50, currentY);
   doc.setFont("helvetica", "bold");
-  doc.text(examData.examTitle || "N/A", 95, 82 + yOffset);
+  doc.text(examData.examTitle || "N/A", 95, currentY);
+  currentY += 7;
 
   doc.setFont("helvetica", "normal");
-  doc.text(`Fecha:`, 50, 89 + yOffset);
+  doc.text(`Fecha:`, 50, currentY);
   doc.setFont("helvetica", "bold");
-  doc.text(dateStr, 95, 89 + yOffset);
+  doc.text(dateStr, 95, currentY);
+  currentY += 7;
 
   doc.setFont("helvetica", "normal");
-  doc.text(`Calificación Obtenida:`, 50, 96 + yOffset);
+  doc.text(`Calificación Obtenida:`, 50, currentY);
   doc.setFont("helvetica", "bold");
-  doc.text(`${score}/100`, 95, 96 + yOffset);
+  doc.text(`${score}/100`, 95, currentY);
+  currentY += 10;
 
-  let yPosition = 106 + yOffset; // Posición inicial para el contenido dinámico
+  let yPosition = currentY; // Posición inicial para el contenido dinámico
 
   // --- 3. RESUMEN DE ERRORES ---
   if (incorrectAnswers.length > 0) {

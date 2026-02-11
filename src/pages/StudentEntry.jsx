@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
-import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, limit, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User, ShieldAlert, Award } from 'lucide-react';
 import logo from '../assets/Logo.gif'; // Importamos el logo
 
@@ -76,9 +76,13 @@ const StudentEntry = () => {
         return;
       }
 
-      // 2. Si hay resultado, verificar si hay una aprobación de retoma
+      // 2. Si hay resultado, verificar si hay una aprobación de retoma (si existe el documento, está pendiente)
       const approvalsRef = collection(db, "retake_approvals");
-      const qApprovals = query(approvalsRef, where("studentUid", "==", studentUid), where("examId", "==", selectedExamId), limit(1));
+      const qApprovals = query(
+        approvalsRef, 
+        where("studentUid", "==", studentUid), 
+        where("examId", "==", selectedExamId)
+      );
       const approvalsSnap = await getDocs(qApprovals);
 
       if (approvalsSnap.empty) {
@@ -91,12 +95,40 @@ const StudentEntry = () => {
     checkExamStatus();
   }, [selectedExamId]);
 
-  const handleStartExam = (e) => {
+  const handleStartExam = async (e) => {
     e.preventDefault();
     if (!selectedExamId) {
       alert("⚠️ Por favor selecciona una evaluación de la lista.");
       return;
     }
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // --- NUEVO: Consumir el pase de reintento ANTES de iniciar ---
+    // Si el examen no está bloqueado, intentamos consumir un pase de reintento si existe.
+    if (!examStatus.blocked) {
+      try {
+        const approvalsRef = collection(db, "retake_approvals");
+        const qApprovals = query(approvalsRef, where("studentUid", "==", user.uid), where("examId", "==", selectedExamId), limit(1));
+        const approvalsSnap = await getDocs(qApprovals);
+        if (!approvalsSnap.empty) {
+          // --- CORRECCIÓN: Eliminamos el documento en lugar de actualizarlo ---
+          const approvalDocRef = approvalsSnap.docs[0].ref;
+          await deleteDoc(approvalDocRef);
+          console.log("Pase de reintento consumido (eliminado).");
+        }
+      } catch (error) {
+        console.error("Error consumiendo el pase de reintento:", error);
+        alert("Hubo un problema al iniciar el examen. Por favor, inténtalo de nuevo.");
+        return; // Detenemos la navegación si falla
+      }
+    }
+
+    // --- NUEVO: Limpiar el progreso guardado antes de iniciar un nuevo intento ---
+    // Esto asegura que el examen siempre comience desde la pregunta 1.
+    const storageKey = `exam_progress_${user.uid}_${selectedExamId}`;
+    localStorage.removeItem(storageKey);
+
     navigate(`/examen/${selectedExamId}`);
   };
 

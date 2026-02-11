@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useBeforeUnload } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
-import { doc, getDoc, addDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, query, where, getDocs, limit, deleteDoc } from 'firebase/firestore';
 import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, EyeOff, Maximize, ArrowRight } from 'lucide-react';
 import logo from '../assets/Logo.png'; // Importamos el logo
 import { generateConstancia } from '../utils/generateConstancia';
@@ -76,11 +76,12 @@ const StudentExam = () => {
     });
 
     // Guardar el resultado en Firebase (Opcional, para el registro)
-    const user = auth.currentUser;
     let studentData = {};
     
-    if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
+    // --- CORRECCIÓN: Obtener el usuario actual directamente aquí ---
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
         if (userDoc.exists()) {
             studentData = userDoc.data();
         }
@@ -88,7 +89,7 @@ const StudentExam = () => {
 
     try {
       // Contar intentos previos para este examen y alumno
-      const resultsQuery = query(collection(db, "results"), where("studentUid", "==", user.uid), where("examId", "==", id));
+      const resultsQuery = query(collection(db, "results"), where("studentUid", "==", currentUser.uid), where("examId", "==", id));
       const previousResults = await getDocs(resultsQuery);
       const attemptNumber = previousResults.size + 1;
       const finalScore = Number(((correctCount / exam.questions.length) * 100).toFixed(2));
@@ -111,9 +112,9 @@ const StudentExam = () => {
         studentCurp: studentData.curp || "N/A",
         studentOccupation: studentData.occupation || "N/A",
         studentCompany: studentData.company || "N/A",
-        studentCompanyRfc: studentData.companyRfc || "N/A", // <-- Guardamos el RFC de la empresa
-        studentEmail: user ? user.email : "N/A", // <-- Guardamos el email del usuario
-        studentUid: user ? user.uid : "anon",
+        studentCompanyRfc: studentData.companyRfc || "N/A",
+        studentEmail: currentUser ? currentUser.email : "N/A", // <-- Guardamos el email del usuario
+        studentUid: currentUser ? currentUser.uid : "anon",
         
         // Datos Académicos
         score: finalScore,
@@ -129,16 +130,6 @@ const StudentExam = () => {
         timestamp: new Date()
       });
       
-      // --- NUEVO: Consumir el pase de reintento DESPUÉS de guardar el resultado ---
-      const approvalsRef = collection(db, "retake_approvals");
-      const qApprovals = query(approvalsRef, where("studentUid", "==", user.uid), where("examId", "==", id), limit(1));
-      const approvalSnapshot = await getDocs(qApprovals);
-      if (!approvalSnapshot.empty) {
-        // Si encontramos un pase de reintento, lo eliminamos.
-        await deleteDoc(doc(db, "retake_approvals", approvalSnapshot.docs[0].id));
-        console.log("Pase de reintento consumido.");
-      }
-
       // Limpiamos el progreso del examen del localStorage
       clearProgress();
       
@@ -269,6 +260,7 @@ const StudentExam = () => {
                 studentCurp: userData.curp,
                 studentOccupation: userData.occupation,
                 studentCompany: userData.company,
+                studentCompanyRfc: userData.companyRfc,
             };
 
             const examPDFData = {
@@ -284,9 +276,8 @@ const StudentExam = () => {
        }
     };
 
-    const handleGoHomeAndLogout = async () => {
-      await signOut(auth);
-      window.location.href = '/'; // Redirigimos a la página principal
+    const handleGoToPortal = () => {
+      navigate('/portal'); // Redirigimos al portal del estudiante
     };
 
     return (
@@ -375,7 +366,7 @@ const StudentExam = () => {
             </button>
             
             <button 
-              onClick={handleGoHomeAndLogout} 
+              onClick={handleGoToPortal} 
               className="w-full bg-gray-100 text-gray-600 py-3 rounded-lg hover:bg-gray-200 transition font-medium"
             >
               Volver al Inicio

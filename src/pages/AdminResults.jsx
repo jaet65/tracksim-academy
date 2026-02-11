@@ -367,7 +367,8 @@ const AdminResults = () => {
                                 studentEmail: r.studentEmail || 'No disponible',
                                 studentCurp: r.studentCurp,
                                 studentOccupation: r.studentOccupation,
-                                studentCompany: r.studentCompany
+                                studentCompany: r.studentCompany,
+                                studentCompanyRfc: r.studentCompanyRfc,
                               };
                               const examPDFData = { examTitle: r.examTitle };
                               const incorrectAnswers = r.examQuestions
