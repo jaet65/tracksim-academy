@@ -12,7 +12,7 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Lock, Mail, Loader, AlertCircle, Home, CheckCircle } from 'lucide-react';
 import logo from '../assets/Logo.gif';
-import googleIcon from '../assets/google.svg';
+import googleIcon from '../assets/Google.svg';
 
 const ADMIN_EMAILS = ["magraz@corporativomaf.com"]; // TU CORREO ADMIN AQUÍ
 
