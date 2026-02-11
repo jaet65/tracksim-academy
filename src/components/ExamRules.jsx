@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, EyeOff, ArrowRight, CheckCircle } from 'lucide-react';
+import { Clock, EyeOff, ArrowRight, CheckCircle, Wifi, BookX, UserX } from 'lucide-react';
 import logo from '../assets/Logo.gif';
 import { useButtonCountdown } from '../hooks/useButtonCountdown'; // <-- NUEVO: Importamos el hook
 
@@ -27,6 +27,27 @@ const ExamRules = ({ examDurationInSeconds, onAccept, onCancel }) => {
             <div>
               <h3 className="font-bold text-lg">No Salir de la Pantalla</h3>
               <p className="text-gray-500">El examen debe realizarse en pantalla completa. Si sales de la pestaña o minimizas la ventana, recibirás una advertencia. Después de <strong>2 advertencias</strong>, el examen finalizará automáticamente.</p>
+            </div>
+          </li>
+          <li className="flex items-start gap-4">
+            <BookX className="w-7 h-7 text-orange-500 mt-1 flex-shrink-0" />
+            <div>
+              <h3 className="font-bold text-lg">Sin Materiales Externos</h3>
+              <p className="text-gray-500">No está permitido el uso de libros, notas, buscadores de internet u otro material de apoyo durante la evaluación.</p>
+            </div>
+          </li>
+          <li className="flex items-start gap-4">
+            <UserX className="w-7 h-7 text-purple-500 mt-1 flex-shrink-0" />
+            <div>
+              <h3 className="font-bold text-lg">Trabajo Individual</h3>
+              <p className="text-gray-500">Esta es una evaluación individual. No está permitida la comunicación o ayuda de otras personas.</p>
+            </div>
+          </li>
+          <li className="flex items-start gap-4">
+            <Wifi className="w-7 h-7 text-teal-500 mt-1 flex-shrink-0" />
+            <div>
+              <h3 className="font-bold text-lg">Conexión Estable</h3>
+              <p className="text-gray-500">Asegúrate de tener una conexión a internet estable. El sistema guardará tu progreso, pero una desconexión prolongada podría afectar tu tiempo.</p>
             </div>
           </li>
         </ul>
