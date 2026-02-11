@@ -14,7 +14,7 @@ import { Lock, Mail, Loader, AlertCircle, Home, CheckCircle } from 'lucide-react
 import logo from '../assets/Logo.gif';
 import googleIcon from '../assets/google.svg';
 
-const ADMIN_EMAILS = ["magraz@corporativomaf.com", "admin@tracksim.com"]; // TU CORREO ADMIN AQUÍ
+const ADMIN_EMAILS = ["magraz@corporativomaf.com"]; // TU CORREO ADMIN AQUÍ
 
 const Login = () => {
   const [isRegistering, setIsRegistering] = useState(false);
