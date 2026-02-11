@@ -4,6 +4,7 @@ import { db, auth } from '../firebase-config';
 import { doc, getDoc, addDoc, collection, query, where, getDocs, deleteDoc, limit } from 'firebase/firestore';import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, EyeOff, Maximize, ArrowRight } from 'lucide-react';
 import logo from '../assets/Logo.png'; // Importamos el logo
 import { generateConstancia } from '../utils/generateConstancia';
+import Confetti from 'react-confetti'; // <-- NUEVO: Importamos el confeti
 import { signOut } from 'firebase/auth'; // Importamos signOut
 
 const StudentExam = () => {
@@ -33,6 +34,15 @@ const StudentExam = () => {
     audio.volume = 1.0; // Aseguramos que el volumen esté al máximo (1.0 es el máximo)
     return audio;
   }); // <-- NUEVO: Sonido de reloj
+
+  // --- CORRECCIÓN: Mover hooks de confeti al nivel superior ---
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+  useEffect(() => {
+    setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+  }, []);
 
   const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 
@@ -500,6 +510,13 @@ const StudentExam = () => {
 
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        {/* --- NUEVO: Animación de confeti si el alumno aprueba --- */}
+        {passed && (
+          <Confetti
+            width={windowSize.width}
+            height={windowSize.height}
+          />
+        )}
         <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full">
           <div className="mb-4 flex justify-center text-center">
             {passed ? (
