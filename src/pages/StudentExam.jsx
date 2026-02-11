@@ -17,7 +17,7 @@ import { formatTime as formatTimeUtil } from '../utils/timeUtils'; // Import uti
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 
-const EXAM_DURATION_SECONDS = 60 * 60; // 60 minutes
+const EXAM_DURATION_SECONDS = 45 * 60; // 60 minutes
 const StudentExam = () => {
   const { id } = useParams(); // Obtenemos el ID del examen desde la URL
   const navigate = useNavigate();
@@ -173,7 +173,7 @@ const StudentExam = () => {
               <Clock className="w-7 h-7 text-blue-500 mt-1 flex-shrink-0" />
               <div>
                 <h3 className="font-bold text-lg">Tiempo Límite</h3>
-                <p className="text-gray-500">Tienes <strong>45 minutos</strong> para completar el examen. El temporizador no se detendrá una vez que comience.</p>
+                <p className="text-gray-500">Tienes <strong>{EXAM_DURATION_SECONDS / 60} minutos</strong> para completar el examen. El temporizador no se detendrá una vez que comience.</p>
               </div>
             </li>
             <li className="flex items-start gap-4">
