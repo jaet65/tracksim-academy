@@ -38,7 +38,7 @@ const AdminUsers = () => {
 
   const handleLogout = async () => {
     await signOut(auth);
-    navigate('/login');
+    navigate('/home');
   };
 
   const handleDeleteUser = async (userId, userName) => {

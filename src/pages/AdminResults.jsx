@@ -74,7 +74,7 @@ const AdminResults = () => {
   }, []);
   const handleLogout = async () => {
     await signOut(auth);
-    navigate('/login');
+    navigate('/home');
   };
 
   // 2. Filtrar por nombre o empresa (Buscador)

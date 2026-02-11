@@ -42,7 +42,7 @@ const Home = () => {
         <div className="flex justify-center gap-4">
           <Link 
             to="/login" 
-            className="flex items-center gap-2 bg-gray-900 text-white px-8 py-4 rounded-lg font-bold text-lg hover:bg-gray-800 transition shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+            className="flex items-center gap-2 bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl transform hover:-translate-y-1"
           >
             Iniciar Evaluación <ArrowRight size={20} />
           </Link>

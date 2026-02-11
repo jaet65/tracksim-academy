@@ -9,8 +9,9 @@ import {
   onAuthStateChanged 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Lock, Mail, Chrome, Loader, AlertCircle } from 'lucide-react';
-import logo from '../assets/Logo.gif'; // Importamos el logo
+import { Lock, Mail, Loader, AlertCircle, Home } from 'lucide-react';
+import logo from '../assets/Logo.gif';
+import googleIcon from '../assets/Google.svg'; // <-- NUEVO: Importamos el SVG de Google
 
 const ADMIN_EMAILS = ["magraz@corporativomaf.com", "admin@tracksim.com"]; // TU CORREO ADMIN AQUÍ
 
@@ -139,8 +140,8 @@ const Login = () => {
           disabled={loading}
           className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 py-3 rounded-md hover:bg-gray-50 transition mb-4 shadow-sm font-bold"
         >
-          {loading ? <Loader className="animate-spin" size={20} /> : <Chrome size={20} className="text-red-500" />}
-          {loading ? 'Procesando...' : 'Entrar con Google'}
+          {loading ? <Loader className="animate-spin" size={20} /> : <img src={googleIcon} alt="Google" className="w-5 h-5" />}
+          {loading ? 'Procesando...' : 'Continuar con Google'}
         </button>
 
         <div className="relative my-6">
@@ -176,6 +177,15 @@ const Login = () => {
         >
           {isRegistering ? '¿Ya tienes cuenta? Entra aquí' : '¿Nuevo? Crea una cuenta'}
         </button>
+
+        <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+          <button 
+            onClick={() => navigate('/')}
+            className="text-sm text-gray-500 hover:text-gray-700 transition font-medium flex items-center justify-center gap-2 mx-auto"
+          >
+            <Home size={16} /> Volver a la página principal
+          </button>
+        </div>
       </div>
     </div>
   );

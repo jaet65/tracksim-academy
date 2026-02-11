@@ -63,7 +63,7 @@ const StudentResults = () => {
 
   const handleLogout = async () => {
     await signOut(auth);
-    navigate('/login');
+    navigate('/home');
   };
 
   const handleDownloadConstancia = (result) => {

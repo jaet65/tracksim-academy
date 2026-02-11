@@ -47,7 +47,7 @@ const StudentEntry = () => {
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) {
-        navigate('/login');
+        navigate('/home');
       } else {
         initData(user);
       }
