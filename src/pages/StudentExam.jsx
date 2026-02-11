@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useBeforeUnload } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
-import { doc, getDoc, addDoc, collection, query, where, getDocs, limit, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, query, where, getDocs, limit, deleteDoc, orderBy } from 'firebase/firestore';
 import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, EyeOff, Maximize, ArrowRight } from 'lucide-react';
 import logo from '../assets/Logo.png'; // Importamos el logo
 import { generateConstancia } from '../utils/generateConstancia';
@@ -14,6 +14,8 @@ import { useExamProgress } from '../hooks/useExamProgress';
 import { useAntiCheat } from '../hooks/useAntiCheat';
 import { useExamTimer } from '../hooks/useExamTimer'; // Assuming this hook will be modified to accept initial time
 import { formatTime as formatTimeUtil } from '../utils/timeUtils'; // Import utility formatTime
+import ExamDescription from '../components/ExamDescription'; // <-- NUEVO
+import ExamRules from '../components/ExamRules'; // <-- NUEVO
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 
@@ -28,6 +30,7 @@ const StudentExam = () => {
   const [timeUp, setTimeUp] = useState(false); // Nuevo estado para controlar si el tiempo se agotó
   const [terminatedForCheating, setTerminatedForCheating] = useState(false);
   const [showConfirmFinishModal, setShowConfirmFinishModal] = useState(false); // <-- Nuevo estado para el modal de confirmación
+  const [descriptionAccepted, setDescriptionAccepted] = useState(false); // <-- NUEVO: Para la pantalla de descripción
   const [rulesAccepted, setRulesAccepted] = useState(false); // <-- Nuevo estado
   const [showErrorSummary, setShowErrorSummary] = useState(false); // <-- Nuevo estado para mostrar errores
   const [displayTimeTaken, setDisplayTimeTaken] = useState(0); // New state to store time taken for display
@@ -35,12 +38,12 @@ const StudentExam = () => {
   // --- Uso de Hooks Personalizados ---
   const { exam, loading } = useExamData(id);
   const { currentQuestionIndex, setCurrentQuestionIndex, answers, handleSelectOption, clearProgress } = useExamProgress(exam, id, finished);
-  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound } = useAntiCheat(rulesAccepted && !finished, () => finishExam(true));  // --- NUEVO: Duración dinámica del examen ---
+  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound } = useAntiCheat(descriptionAccepted && rulesAccepted && !finished, () => finishExam(true));  // --- NUEVO: Duración dinámica del examen ---
   const examDurationInSeconds = exam?.duration ? exam.duration * 60 : 45 * 60;
 
   const onTimeUp = () => { setTimeUp(true); finishExam(); };
   // Pasamos la duración dinámica al hook del temporizador
-  const { timeLeft, formatTime, initialTimeInSeconds } = useExamTimer(finished || loading || !rulesAccepted, onTimeUp, examDurationInSeconds);
+  const { timeLeft, formatTime, initialTimeInSeconds } = useExamTimer(finished || loading || !rulesAccepted || !descriptionAccepted, onTimeUp, examDurationInSeconds);
 
   // --- DEBUG: Console logs para verificar el flujo de datos (eliminados) ---
   
@@ -160,6 +163,11 @@ const StudentExam = () => {
     setRulesAccepted(true);
   };
 
+  // --- NUEVO: Pantalla de Descripción del Examen ---
+  if (!descriptionAccepted) {
+    return <ExamDescription exam={exam} onAccept={() => setDescriptionAccepted(true)} />;
+  }
+
   if (loading) return <div className="p-10 text-center">Cargando examen...</div>;
   if (!exam) return <div className="p-10 text-center text-red-600">No se encontró el examen.</div>;
   // --- CORRECCIÓN: No renderizar nada hasta que el examen esté completamente cargado ---
@@ -176,43 +184,11 @@ const StudentExam = () => {
   // --- NUEVO: Pantalla de Reglas ---
   if (!rulesAccepted) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full">
-          <div className="text-center">
-            <img src={logo} alt="Logo" className="h-12 mx-auto mb-4" />
-            <h1 className="text-3xl font-bold text-gray-800 mb-4">Reglas de la Evaluación</h1>
-            <p className="text-gray-600 mb-8">Por favor, lee atentamente las siguientes instrucciones antes de comenzar.</p>
-          </div>
-          <ul className="text-left space-y-5 mb-10">
-            <li className="flex items-start gap-4">
-              <Clock className="w-7 h-7 text-blue-500 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-bold text-lg">Tiempo Límite</h3>
-                <p className="text-gray-500">Tienes <strong>{examDurationInSeconds / 60} minutos</strong> para completar el examen. El temporizador no se detendrá una vez que comience.</p>
-              </div>
-            </li>
-            <li className="flex items-start gap-4">
-              <EyeOff className="w-7 h-7 text-red-500 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-bold text-lg">No Salir de la Pantalla</h3>
-                <p className="text-gray-500">El examen debe realizarse en pantalla completa. Si sales de la pestaña o minimizas la ventana, recibirás una advertencia. Después de <strong>2 advertencias</strong>, el examen finalizará automáticamente.</p>
-              </div>
-            </li>
-          </ul>
-          <button 
-            onClick={handleAcceptRulesAndFullscreen}
-            className="w-full bg-blue-600 text-white py-4 rounded-lg hover:bg-blue-700 transition shadow-lg font-bold text-lg flex items-center justify-center gap-2"
-          >
-            He leído las reglas, comenzar <ArrowRight size={20} />
-          </button>
-          <button
-            onClick={() => navigate('/portal')}
-            className="mt-4 text-sm text-gray-500 hover:text-gray-700 transition font-medium"
-          >
-            Cancelar y volver al portal
-          </button>
-        </div>
-      </div>
+      <ExamRules 
+        examDurationInSeconds={examDurationInSeconds}
+        onAccept={handleAcceptRulesAndFullscreen}
+        onCancel={() => navigate('/portal')}
+      />
     );
   }
 
