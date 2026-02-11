@@ -4,12 +4,30 @@ import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query } from 'firebase/firestore';
 import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle } from 'lucide-react';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [examTitle, setExamTitle] = useState(''); // Estado para el nombre del examen
   const [exams, setExams] = useState([]);
   const [loadingExams, setLoadingExams] = useState(true);
+  const [chartData, setChartData] = useState(null);
+  const [allResults, setAllResults] = useState([]);
+  const [availableMonths, setAvailableMonths] = useState([]);
+  const [selectedExamFilter, setSelectedExamFilter] = useState('all');
+  const [selectedMonthFilter, setSelectedMonthFilter] = useState('all');
+  const [loadingChart, setLoadingChart] = useState(true);
   const navigate = useNavigate();
 
   const fetchExams = async () => {
@@ -38,8 +56,71 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    fetchExams();
+    const fetchInitialData = async () => {
+      setLoadingExams(true);
+      setLoadingChart(true);
+      try {
+        // Fetch exams
+        await fetchExams();
+
+        // Fetch all results for chart and filters
+        const resultsRef = collection(db, "results");
+        const resultsSnapshot = await getDocs(resultsRef);
+        const resultsData = resultsSnapshot.docs.map(doc => doc.data());
+        setAllResults(resultsData);
+
+        // Derive available months from results
+        const months = resultsData.reduce((acc, result) => {
+          const date = result.timestamp.toDate();
+          const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          acc.add(month);
+          return acc;
+        }, new Set());
+        setAvailableMonths(Array.from(months).sort().reverse());
+
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+      } finally {
+        setLoadingChart(false);
+        setLoadingExams(false);
+      }
+    };
+
+    fetchInitialData();
   }, []);
+
+  // This effect updates the chart whenever filters change
+  useEffect(() => {
+    if (allResults.length === 0) return;
+
+    const filtered = allResults.filter(result => {
+      const examMatch = selectedExamFilter === 'all' || result.examId === selectedExamFilter;
+      const date = result.timestamp.toDate();
+      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthMatch = selectedMonthFilter === 'all' || month === selectedMonthFilter;
+      return examMatch && monthMatch;
+    });
+
+    const monthlyData = filtered.reduce((acc, result) => {
+      const date = result.timestamp.toDate();
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!acc[monthKey]) acc[monthKey] = { approved: 0, failed: 0 };
+      if (result.approved) acc[monthKey].approved += 1;
+      else acc[monthKey].failed += 1;
+      return acc;
+    }, {});
+
+    const sortedMonths = Object.keys(monthlyData).sort();
+    const labels = sortedMonths.map(month => new Date(month + '-02').toLocaleString('es-ES', { month: 'short', year: 'numeric' }));
+
+    setChartData({
+      labels,
+      datasets: [
+        { label: 'Aprobados', data: sortedMonths.map(m => monthlyData[m].approved), backgroundColor: 'rgba(34, 197, 94, 0.6)' },
+        { label: 'Reprobados', data: sortedMonths.map(m => monthlyData[m].failed), backgroundColor: 'rgba(239, 68, 68, 0.6)' },
+      ],
+    });
+  }, [allResults, selectedExamFilter, selectedMonthFilter]);
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -282,6 +363,56 @@ const AdminDashboard = () => {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+
+        {/* Gráfico de Resultados */}
+        <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-green-500">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">Rendimiento Mensual</h2>
+          {/* --- NUEVO: Filtros para el gráfico --- */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Filtrar por Examen</label>
+              <select
+                value={selectedExamFilter}
+                onChange={(e) => setSelectedExamFilter(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="all">Todos los exámenes</option>
+                {exams.map(exam => <option key={exam.id} value={exam.id}>{exam.title}</option>)}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Filtrar por Mes</label>
+              <select
+                value={selectedMonthFilter}
+                onChange={(e) => setSelectedMonthFilter(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="all">Todos los meses</option>
+                {availableMonths.map(month => <option key={month} value={month}>{new Date(month + '-02').toLocaleString('es-ES', { month: 'long', year: 'numeric' })}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {loadingChart ? (
+            <div className="flex justify-center items-center p-8">
+              <Loader className="animate-spin text-blue-600" />
+              <span className="ml-3 text-gray-500">Cargando datos del gráfico...</span>
+            </div>
+          ) : chartData && chartData.labels.length > 0 ? (
+            <Bar
+              options={{
+                responsive: true,
+                plugins: {
+                  legend: { position: 'top' },
+                  title: { display: true, text: 'Exámenes Aprobados vs. Reprobados' },
+                },
+              }}
+              data={chartData}
+            />
+          ) : (
+            <p className="text-center text-gray-500 py-4">No hay suficientes datos para mostrar el gráfico.</p>
           )}
         </div>
 
