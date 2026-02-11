@@ -33,7 +33,8 @@ const StudentEntry = () => {
         const examsList = examsSnapshot.docs.map(doc => ({
           id: doc.id,
           title: doc.data().title || "Examen sin título",
-          totalQuestions: doc.data().totalQuestions || 0
+          totalQuestions: doc.data().totalQuestions || 0,
+          duration: doc.data().duration || 45 // <-- Agregamos la duración
         }));
 
         setAvailableExams(examsList);
@@ -143,7 +144,7 @@ const StudentEntry = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
         
         {/* Header con Bienvenida */}
         <div className="flex justify-center mb-6">
@@ -179,7 +180,7 @@ const StudentEntry = () => {
                 {availableExams.length > 0 ? (
                   availableExams.map((exam) => (
                     <option key={exam.id} value={exam.id}>
-                      {exam.title} ({exam.totalQuestions} preguntas)
+                      {exam.title} ({exam.totalQuestions} preguntas, {exam.duration} min)
                     </option>
                   ))
                 ) : (
