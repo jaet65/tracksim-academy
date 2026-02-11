@@ -6,12 +6,13 @@ import {
   createUserWithEmailAndPassword, 
   GoogleAuthProvider, 
   signInWithPopup,
-  onAuthStateChanged 
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Lock, Mail, Loader, AlertCircle, Home } from 'lucide-react';
+import { Lock, Mail, Loader, AlertCircle, Home, CheckCircle } from 'lucide-react';
 import logo from '../assets/Logo.gif';
-import googleIcon from '../assets/Google.svg'; // <-- NUEVO: Importamos el SVG de Google
+import googleIcon from '../assets/google.svg';
 
 const ADMIN_EMAILS = ["magraz@corporativomaf.com", "admin@tracksim.com"]; // TU CORREO ADMIN AQUÍ
 
@@ -20,6 +21,7 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false); // Spinner manual para acciones
   const [checkingAuth, setCheckingAuth] = useState(true); // Spinner inicial de carga
   const navigate = useNavigate();
@@ -95,6 +97,7 @@ const Login = () => {
   const handleAuth = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
     try {
       let userCred;
@@ -110,6 +113,23 @@ const Login = () => {
     }
   };
 
+  const handlePasswordReset = async () => {
+    if (!email) {
+      setError("Por favor, introduce tu correo electrónico para restablecer la contraseña.");
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setSuccess("Se ha enviado un correo para restablecer tu contraseña. Revisa tu bandeja de entrada (y la carpeta de spam).");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
   if (checkingAuth) {
     return (
       <div className="min-h-screen flex justify-center items-center bg-gray-100">
@@ -132,6 +152,12 @@ const Login = () => {
         {error && (
           <div className="bg-red-50 text-red-700 p-3 rounded mb-4 text-sm flex gap-2 items-center">
             <AlertCircle size={16} /> {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 text-green-700 p-3 rounded mb-4 text-sm flex gap-2 items-center">
+            <CheckCircle size={16} /> {success}
           </div>
         )}
 
@@ -171,13 +197,21 @@ const Login = () => {
           </button>
         </form>
 
-        <button 
-          onClick={() => setIsRegistering(!isRegistering)} 
-          className="mt-4 w-full text-center text-blue-600 text-sm hover:underline"
-        >
-          {isRegistering ? '¿Ya tienes cuenta? Entra aquí' : '¿Nuevo? Crea una cuenta'}
-        </button>
-
+        <div className="flex justify-between items-center mt-4 text-sm">
+          <button 
+            type="button"
+            onClick={() => setIsRegistering(!isRegistering)} 
+            className="text-blue-600 hover:underline"
+          >
+            {isRegistering ? '¿Ya tienes cuenta? Entra aquí' : '¿Nuevo? Crea una cuenta'}
+          </button>
+          {!isRegistering && (
+            <button type="button" onClick={handlePasswordReset} className="text-gray-500 hover:underline">
+              ¿Olvidaste tu contraseña?
+            </button>
+          )}
+        </div>
+        
         <div className="mt-6 pt-6 border-t border-gray-200 text-center">
           <button 
             onClick={() => navigate('/')}
