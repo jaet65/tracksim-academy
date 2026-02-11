@@ -4,18 +4,19 @@ import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query } from 'firebase/firestore';
 import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download } from 'lucide-react';
-import { Bar } from 'react-chartjs-2';
+import { Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
 } from 'chart.js';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
@@ -102,23 +103,28 @@ const AdminDashboard = () => {
       return examMatch && monthMatch;
     });
 
-    const monthlyData = filtered.reduce((acc, result) => {
-      const date = result.timestamp.toDate();
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (!acc[monthKey]) acc[monthKey] = { approved: 0, failed: 0 };
-      if (result.approved) acc[monthKey].approved += 1;
-      else acc[monthKey].failed += 1;
+    const totals = filtered.reduce((acc, result) => {
+      if (result.approved) acc.approved += 1;
+      else acc.failed += 1;
       return acc;
-    }, {});
-
-    const sortedMonths = Object.keys(monthlyData).sort();
-    const labels = sortedMonths.map(month => new Date(month + '-02').toLocaleString('es-ES', { month: 'short', year: 'numeric' }));
+    }, { approved: 0, failed: 0 });
 
     setChartData({
-      labels,
+      labels: ['Aprobados', 'Reprobados'],
       datasets: [
-        { label: 'Aprobados', data: sortedMonths.map(m => monthlyData[m].approved), backgroundColor: 'rgba(34, 197, 94, 0.6)' },
-        { label: 'Reprobados', data: sortedMonths.map(m => monthlyData[m].failed), backgroundColor: 'rgba(239, 68, 68, 0.6)' },
+        {
+          label: '# de Resultados',
+          data: [totals.approved, totals.failed],
+          backgroundColor: [
+            'rgba(34, 197, 94, 0.7)',
+            'rgba(239, 68, 68, 0.7)',
+          ],
+          borderColor: [
+            'rgba(34, 197, 94, 1)',
+            'rgba(239, 68, 68, 1)',
+          ],
+          borderWidth: 1,
+        },
       ],
     });
   }, [allResults, selectedExamFilter, selectedMonthFilter]);
@@ -424,8 +430,9 @@ const AdminDashboard = () => {
               <Loader className="animate-spin text-blue-600" />
               <span className="ml-3 text-gray-500">Cargando datos del gráfico...</span>
             </div>
-          ) : chartData && chartData.labels.length > 0 ? (
-            <Bar
+          ) : chartData && chartData.datasets[0].data.some(d => d > 0) ? (
+            <div className="max-w-sm mx-auto">
+              <Pie
               ref={chartRef}
               options={{
                 responsive: true,
@@ -436,6 +443,7 @@ const AdminDashboard = () => {
               }}
               data={chartData}
             />
+            </div>
           ) : (
             <p className="text-center text-gray-500 py-4">No hay suficientes datos para mostrar el gráfico.</p>
           )}
