@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query } from 'firebase/firestore';
-import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle } from 'lucide-react';
+import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -28,6 +28,7 @@ const AdminDashboard = () => {
   const [selectedExamFilter, setSelectedExamFilter] = useState('all');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState('all');
   const [loadingChart, setLoadingChart] = useState(true);
+  const chartRef = useRef(null);
   const navigate = useNavigate();
 
   const fetchExams = async () => {
@@ -122,6 +123,18 @@ const AdminDashboard = () => {
     });
   }, [allResults, selectedExamFilter, selectedMonthFilter]);
 
+  const handleExportChart = () => {
+    const chart = chartRef.current;
+    if (!chart) {
+      alert("El gráfico no está listo para ser exportado.");
+      return;
+    }
+    const image = chart.toBase64Image();
+    const link = document.createElement('a');
+    link.href = image;
+    link.download = 'rendimiento_mensual.png';
+    link.click();
+  };
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -368,7 +381,18 @@ const AdminDashboard = () => {
 
         {/* Gráfico de Resultados */}
         <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-green-500">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Rendimiento Mensual</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">Rendimiento Mensual</h2>
+            {chartData && chartData.labels.length > 0 && (
+              <button
+                onClick={handleExportChart}
+                className="flex items-center gap-2 bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition shadow-sm text-sm font-medium"
+              >
+                <Download size={16} /> Exportar PNG
+              </button>
+            )}
+          </div>
+
           {/* --- NUEVO: Filtros para el gráfico --- */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="flex-1">
@@ -402,6 +426,7 @@ const AdminDashboard = () => {
             </div>
           ) : chartData && chartData.labels.length > 0 ? (
             <Bar
+              ref={chartRef}
               options={{
                 responsive: true,
                 plugins: {
