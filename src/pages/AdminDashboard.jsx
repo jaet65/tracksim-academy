@@ -53,8 +53,13 @@ const AdminDashboard = () => {
   const getCorrectIndex = (letter) => {
     if (!letter) return -1;
     const cleanLetter = letter.toString().trim().toUpperCase();
-    const map = { 'A': 0, 'B': 1, 'C': 2 };
+    const map = { 'A': 0, 'B': 1, 'C': 2, 'D': 3, 'VERDADERO': 0, 'FALSO': 1 };
     return map[cleanLetter] !== undefined ? map[cleanLetter] : -1;
+  };
+
+  const isTrueFalse = (row) => {
+    const answer = row['Respuesta']?.toString().trim().toUpperCase();
+    return answer === 'VERDADERO' || answer === 'FALSO';
   };
 
   useEffect(() => {
@@ -161,14 +166,26 @@ const AdminDashboard = () => {
       complete: async (results) => {
         try {
           const questions = results.data.map((row, index) => {
+            let options;
+            let questionType = 'MC'; // Multiple Choice por defecto
+
+            if (isTrueFalse(row)) {
+              questionType = 'TF'; // True/False
+              options = ['Verdadero', 'Falso'];
+            } else {
+              options = [row['Opcion A'], row['Opcion B'], row['Opcion C']];
+              if (row['Opcion D'] && row['Opcion D'].trim() !== '') {
+                options.push(row['Opcion D']);
+              }
+              // Filtramos opciones vacías en caso de que sea una pregunta con menos de 4 opciones
+              options = options.filter(opt => opt && opt.trim() !== '');
+            }
+
             return {
               id: index + 1,
               text: row['Pregunta'],
-              options: [
-                row['Opcion A'],
-                row['Opcion B'],
-                row['Opcion C']
-              ],
+              type: questionType,
+              options: options,
               correctOption: getCorrectIndex(row['Respuesta'])
             };
           }).filter(q => q.text);
@@ -345,7 +362,7 @@ const AdminDashboard = () => {
 
           <div className="mt-8 text-xs text-gray-400">
             Columnas requeridas en Excel: <br/>
-            <span className="font-mono bg-gray-100 px-1 rounded">Pregunta, Opcion A, Opcion B, Opcion C, Respuesta</span>
+            <span className="font-mono bg-gray-100 px-1 rounded">Pregunta, Opcion A, Opcion B, Opcion C, (Opcion D), Respuesta</span>
           </div>
 
         </div>

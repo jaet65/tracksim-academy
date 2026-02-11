@@ -1,9 +1,64 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, ArrowRight, CheckCircle, GraduationCap } from 'lucide-react';
+import { ShieldCheck, ArrowRight, CheckCircle, GraduationCap, ChevronDown, ArrowUp } from 'lucide-react';
 import logo from '../assets/Logo.gif'; // Importamos el logo
 
+const faqs = [
+  {
+    question: "¿Qué es una constancia DC-3?",
+    answer: "Es el documento oficial que acredita que un trabajador ha recibido capacitación en una habilidad laboral específica, conforme a los planes y programas de la empresa. Es un requisito de la Secretaría del Trabajo y Previsión Social (STPS) en México."
+  },
+  {
+    question: "¿Este certificado tiene validez oficial?",
+    answer: "Sí. Las constancias emitidas a través de esta plataforma cumplen con los formatos y requisitos establecidos por la STPS, haciéndolas válidas para los fines correspondientes ante la autoridad laboral."
+  },
+  {
+    question: "¿Qué necesito para realizar la evaluación?",
+    answer: "Necesitas una cuenta en la plataforma, una conexión a internet estable y un dispositivo (computadora o tablet) con un navegador web actualizado. Asegúrate de tener tus datos personales (CURP, nombre completo) a la mano."
+  },
+  {
+    question: "¿Qué pasa si no apruebo el examen?",
+    answer: "Si no alcanzas la calificación mínima, no te preocupes. La plataforma registrará tu intento. Deberás contactar a tu coordinador o al administrador para que te autorice un nuevo intento de evaluación."
+  },
+  {
+    question: "¿Qué pasa si no apruebo el ejercicio del simulador?",
+    answer: "En caso que la calificación del simulador no sea aprobatoria, no se podrá generar la constancia DC-3."
+  },
+  {
+    question: "¿Por qué el examen requiere pantalla completa y da advertencias?",
+    answer: "Para garantizar la integridad de la evaluación, el sistema cuenta con medidas de seguridad. El examen debe realizarse en pantalla completa y no se debe salir de la pestaña. Si el sistema detecta que cambias de ventana, recibirás una advertencia; al acumular varias, el examen se finalizará automáticamente."
+  },
+  {
+    question: "¿Cómo se protegen mis datos y la seguridad de la plataforma?",
+    answer: "La plataforma utiliza Firebase de Google para la autenticación y almacenamiento de datos, lo que garantiza que tu información personal y los resultados de tus evaluaciones estén cifrados y protegidos. Las contraseñas nunca se almacenan directamente y el acceso a los datos está estrictamente controlado por roles. Además, durante los exámenes, se implementan medidas anti-trampas como el modo de pantalla completa y la detección de cambio de ventana para asegurar la integridad de las evaluaciones."
+  }
+];
+
 const Home = () => {
+  const [openFaqIndex, setOpenFaqIndex] = useState(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowBackToTop(true);
+      } else {
+        setShowBackToTop(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const handleFaqToggle = (index) => {
+    setOpenFaqIndex(openFaqIndex === index ? null : index);
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navbar */}
@@ -77,43 +132,31 @@ const Home = () => {
               Resolvemos algunas de las dudas más comunes sobre la plataforma y el proceso de certificación.
             </p>
           </div>
-          <div className="space-y-8">
-            <div>
-              <h3 className="font-semibold text-lg text-gray-800">¿Qué es una constancia DC-3?</h3>
-              <p className="mt-2 text-gray-600">
-                Es el documento oficial que acredita que un trabajador ha recibido capacitación en una habilidad laboral específica, conforme a los planes y programas de la empresa. Es un requisito de la Secretaría del Trabajo y Previsión Social (STPS) en México.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg text-gray-800">¿Este certificado tiene validez oficial?</h3>
-              <p className="mt-2 text-gray-600">
-                Sí. Las constancias emitidas a través de esta plataforma cumplen con los formatos y requisitos establecidos por la STPS, haciéndolas válidas para los fines correspondientes ante la autoridad laboral.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg text-gray-800">¿Qué necesito para realizar la evaluación?</h3>
-              <p className="mt-2 text-gray-600">
-                Necesitas una cuenta en la plataforma, una conexión a internet estable y un dispositivo (computadora o tablet) con un navegador web actualizado. Asegúrate de tener tus datos personales (CURP, nombre completo) a la mano.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg text-gray-800">¿Qué pasa si no apruebo el examen?</h3>
-              <p className="mt-2 text-gray-600">
-                Si no alcanzas la calificación mínima, no te preocupes. La plataforma registrará tu intento. Deberás contactar a tu coordinador o al administrador para que te autorice un nuevo intento de evaluación.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg text-gray-800">¿Qué pasa si no apruebo el ejercicio del simulador?</h3>
-              <p className="mt-2 text-gray-600">
-                En caso que la calificación del simulador no sea aprobatoria, no se podrá generar la constancia DC-3.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg text-gray-800">¿Por qué el examen requiere pantalla completa y da advertencias?</h3>
-              <p className="mt-2 text-gray-600">
-                Para garantizar la integridad de la evaluación, el sistema cuenta con medidas de seguridad. El examen debe realizarse en pantalla completa y no se debe salir de la pestaña. Si el sistema detecta que cambias de ventana, recibirás una advertencia; al acumular varias, el examen se finalizará automáticamente.
-              </p>
-            </div>
+          <div className="space-y-4">
+            {faqs.map((faq, index) => (
+              <div key={index} className="border-b border-gray-200 last:border-b-0">
+                <button
+                  onClick={() => handleFaqToggle(index)}
+                  className="w-full flex justify-between items-center text-left py-4 focus:outline-none"
+                >
+                  <h3 className="font-semibold text-lg text-gray-800">{faq.question}</h3>
+                  <ChevronDown
+                    className={`w-6 h-6 text-gray-500 transform transition-transform duration-500 ease-in-out ${
+                      openFaqIndex === index ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+                <div
+                  className={`overflow-hidden transition-all duration-500 ease-in-out ${
+                    openFaqIndex === index ? 'max-h-96' : 'max-h-0'
+                  }`}
+                >
+                  <div className="pb-4 pr-6">
+                    <p className="text-gray-600">{faq.answer}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -122,6 +165,16 @@ const Home = () => {
       <footer className="border-t border-gray-200 py-6 text-center text-gray-400 text-sm">
         <p>© 2026 Plataforma de Evaluación Laboral. Todos los derechos reservados.</p>
       </footer>
+
+      {/* Botón para Volver Arriba */}
+      {showBackToTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-opacity duration-300 z-50"
+        >
+          <ArrowUp size={24} />
+        </button>
+      )}
     </div>
   );
 };

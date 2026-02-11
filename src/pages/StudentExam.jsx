@@ -488,20 +488,33 @@ const StudentExam = () => {
             </h2>
 
             <div className="space-y-3">
-              {question.shuffledOptions.map((shuffledOpt, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSelectOption(idx)}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                    answers[currentQuestionIndex] === question.originalIndexMap[idx]
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' 
-                      : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="inline-block w-6 font-bold mr-2">{String.fromCharCode(65 + idx)}.</span>
-                  {shuffledOpt}
-                </button>
-              ))}
+              {question.type === 'TF' ? (
+                <div className="flex gap-4">
+                  {question.shuffledOptions.map((shuffledOpt, idx) => (
+                    <button
+                      key={`${question.id}-${idx}`}
+                      onClick={() => handleSelectOption(idx)}
+                      className={`flex-1 text-center p-4 rounded-lg border-2 transition-all font-bold text-lg ${
+                        answers[currentQuestionIndex] === question.originalIndexMap[idx]
+                          ? (shuffledOpt === 'Verdadero' ? 'border-green-500 bg-green-50 text-green-700' : 'border-red-500 bg-red-50 text-red-700')
+                          : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+                      }`}
+                    >{shuffledOpt}</button>
+                  ))}
+                </div>
+              ) : (
+                question.shuffledOptions.map((shuffledOpt, idx) => (
+                  <button
+                    key={`${question.id}-${idx}`}
+                    onClick={() => handleSelectOption(idx)}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                      answers[currentQuestionIndex] === question.originalIndexMap[idx]
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' 
+                        : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                    }`}
+                  ><span className="inline-block w-6 font-bold mr-2">{String.fromCharCode(65 + idx)}.</span>{shuffledOpt}</button>
+                ))
+              )}
             </div>
           </div>
 
