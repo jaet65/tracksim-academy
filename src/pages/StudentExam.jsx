@@ -23,11 +23,18 @@ const StudentExam = () => {
   const [visibilityWarnings, setVisibilityWarnings] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [terminatedForCheating, setTerminatedForCheating] = useState(false);
+  const [warningCountdown, setWarningCountdown] = useState(30); // <-- Nuevo estado para el cronómetro del modal
   const [showConfirmFinishModal, setShowConfirmFinishModal] = useState(false); // <-- Nuevo estado para el modal de confirmación
   const [isFullscreen, setIsFullscreen] = useState(document.fullscreenElement != null);
   const [rulesAccepted, setRulesAccepted] = useState(false); // <-- Nuevo estado
+  const [showErrorSummary, setShowErrorSummary] = useState(false); // <-- Nuevo estado para mostrar errores
+  const [tickTockSound] = useState(() => {
+    const audio = new Audio('/sounds/tick-tock.mp3');
+    audio.volume = 1.0; // Aseguramos que el volumen esté al máximo (1.0 es el máximo)
+    return audio;
+  }); // <-- NUEVO: Sonido de reloj
 
-  const MAX_VISIBILITY_WARNINGS = 3; // Número de advertencias permitidas antes de finalizar el examen
+  const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 
   // Helper function to shuffle an array and return the shuffled array along with a map
   // from new index to original index
@@ -139,39 +146,90 @@ const StudentExam = () => {
 
   // --- NUEVO: Efecto para detectar cambio de pestaña ---
   useEffect(() => {
+    // Solo se ejecuta si el examen ha comenzado y no ha terminado.
+    if (!rulesAccepted || finished) return;
+
     const handleFocusLoss = () => {
-      if (!finished && exam) {
-        setVisibilityWarnings(prev => {
-          const newCount = prev + 1;
-          if (newCount > MAX_VISIBILITY_WARNINGS) { // Exam terminates on the (MAX_VISIBILITY_WARNINGS + 1)th offense
-            setTerminatedForCheating(true);
-            finishExam();
-          } else {
-            setShowWarningModal(true);
-          }
-          return newCount;
-        });
+      // No actuar si el modal ya está visible o el examen terminó
+      if (showWarningModal || finished) {
+        return;
+      }
+
+      const newCount = visibilityWarnings + 1;
+      console.log(`Advertencia de visibilidad #${newCount}`); // <-- Log solicitado
+      setVisibilityWarnings(newCount);
+
+      if (newCount > MAX_VISIBILITY_WARNINGS) {
+        setTerminatedForCheating(true);
+        finishExam();
+      } else {
+        setWarningCountdown(30); // Reiniciamos el contador
+        setShowWarningModal(true); // <-- Activamos el modal
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleFocusLoss();
       }
     };
 
     const handleFullscreenChange = () => { // This is the key condition
       const isCurrentlyFullscreen = document.fullscreenElement != null;
       setIsFullscreen(isCurrentlyFullscreen);
-      if (!isCurrentlyFullscreen && !finished && exam) {
+      if (!isCurrentlyFullscreen && rulesAccepted && !finished) {
         handleFocusLoss(); // If exits fullscreen, count as a warning.
       }
     };
 
     // Escuchamos tanto el cambio de pestaña como la pérdida de foco de la ventana
-    document.addEventListener("visibilitychange", () => { if (document.hidden) handleFocusLoss(); });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleFocusLoss);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => {
-      document.removeEventListener("visibilitychange", () => { if (document.hidden) handleFocusLoss(); });
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleFocusLoss);
       document.removeEventListener('fullscreenchange', handleFullscreenChange); // Clean up event listener
     };
-  }, [finished, exam, showWarningModal, showConfirmFinishModal]);
+  }, [finished, rulesAccepted, exam, visibilityWarnings, showWarningModal]); // Dependencias actualizadas
+
+  // --- NUEVO: Efecto para el cronómetro del modal de advertencia ---
+  useEffect(() => { // Efecto para el sonido
+    if (showWarningModal) {
+      tickTockSound.loop = true; // Para que el sonido se repita
+      tickTockSound.play().catch(e => console.error("Error al reproducir sonido:", e));
+    } else {
+      tickTockSound.pause();
+      tickTockSound.currentTime = 0;
+    }
+
+    // Función de limpieza para detener el sonido
+    return () => {
+      tickTockSound.pause();
+      tickTockSound.currentTime = 0;
+    };
+  }, [showWarningModal, tickTockSound]);
+
+  useEffect(() => { // Efecto para el contador
+    if (!showWarningModal) return;
+
+    if (warningCountdown <= 0) {
+      setTerminatedForCheating(true);
+      finishExam();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setWarningCountdown(prev => prev - 1);
+    }, 1000);
+
+    // Limpiamos el intervalo y reseteamos la velocidad del sonido
+    return () => {
+      clearInterval(timer);
+      tickTockSound.playbackRate = 1.0;
+    };
+  }, [showWarningModal, warningCountdown, tickTockSound]);
+
 
   // Efecto para guardar el progreso en localStorage
   useEffect(() => {
@@ -209,10 +267,20 @@ const StudentExam = () => {
     // Añadimos una guarda para evitar errores si el examen aún no ha cargado.
     // Y otra para evitar que se ejecute múltiples veces.
     if (!exam || finished) {
+      // Si se intenta finalizar de nuevo, nos aseguramos de que el sonido se detenga.
+      tickTockSound.pause();
+      tickTockSound.currentTime = 0;
+
       setShowConfirmFinishModal(false);
       console.warn("Se intentó finalizar un examen que aún no se había cargado.");
+      setShowWarningModal(false); // Aseguramos que el modal de advertencia se cierre
       return;
     }
+
+    // Detenemos el sonido y cerramos el modal de advertencia ANTES de hacer el resto.
+    setShowWarningModal(false);
+    setShowConfirmFinishModal(false);
+
     // Calculamos la nota
     let correctCount = 0;
     exam.questions.forEach((q, index) => {
@@ -242,6 +310,8 @@ const StudentExam = () => {
       setScore(finalScore);
       setAttempt(attemptNumber); // Guardamos el intento en el estado
       setFinished(true);
+
+      console.log(`Guardando intento #${attemptNumber} para el examen "${exam.title}"...`);
 
       await addDoc(collection(db, "results"), {
         examId: id,
@@ -279,7 +349,6 @@ const StudentExam = () => {
     } catch (e) {
       console.error("Error guardando resultado", e);
     } finally {
-      setShowConfirmFinishModal(false); // Ocultar el modal al finalizar
     }
   };
 
@@ -287,6 +356,11 @@ const StudentExam = () => {
     document.documentElement.requestFullscreen().catch(err => {
       alert(`Error al entrar en pantalla completa: ${err.message}. Por favor, habilita los permisos.`);
     });
+  };
+
+  const handleAcceptRulesAndFullscreen = () => {
+    requestFullscreen();
+    setRulesAccepted(true);
   };
 
   if (loading) return <div className="p-10 text-center">Cargando examen...</div>;
@@ -319,7 +393,7 @@ const StudentExam = () => {
             </li>
           </ul>
           <button 
-            onClick={() => setRulesAccepted(true)}
+            onClick={handleAcceptRulesAndFullscreen}
             className="w-full bg-blue-600 text-white py-4 rounded-lg hover:bg-blue-700 transition shadow-lg font-bold text-lg flex items-center justify-center gap-2"
           >
             He leído las reglas, comenzar <ArrowRight size={20} />
@@ -339,6 +413,21 @@ const StudentExam = () => {
   if (finished) {
     // Determinamos si aprobó (ejemplo: nota mayor o igual a 80)
     const passed = score >= 80;
+
+    // --- NUEVO: Creamos una lista con las respuestas incorrectas ---
+    const incorrectAnswers = exam.questions
+      .map((q, index) => {
+        const isCorrect = answers[index] === q.correctOption;
+        if (isCorrect) {
+          return null;
+        }
+        return {
+          question: q.text,
+          yourAnswer: answers[index] !== undefined ? q.options[answers[index]] : "No respondida",
+          correctAnswer: q.options[q.correctOption],
+        };
+      })
+      .filter(Boolean); // Filtramos los nulos (respuestas correctas)
 
     // Datos para el PDF
     const handleDownloadCertificate = () => {
@@ -411,8 +500,8 @@ const StudentExam = () => {
 
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center">
-          <div className="mb-4 flex justify-center">
+        <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full">
+          <div className="mb-4 flex justify-center text-center">
             {passed ? (
                 <CheckCircle className="text-green-500 w-16 h-16" />
             ) : (
@@ -420,13 +509,13 @@ const StudentExam = () => {
             )}
           </div>
           
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">
+          <h2 className="text-3xl font-bold text-gray-800 mb-2 text-center">
             {terminatedForCheating ? "Examen Finalizado" : (timeUp ? "¡Tiempo Agotado!" : (passed ? "¡Felicidades!" : "Examen Finalizado"))}
           </h2>
           
-          <p className="text-gray-500 mb-6">
+          <p className="text-gray-500 mb-6 text-center">
             {terminatedForCheating
-              ? "La evaluación ha finalizado porque has cambiado de pestaña demasiadas veces."
+              ? "La evaluación ha finalizado porque has cambiado de pestaña o ventana demasiadas veces."
               : (timeUp
               ? "El tiempo para completar la evaluación ha terminado. Tu progreso ha sido guardado."
               : (passed 
@@ -435,34 +524,65 @@ const StudentExam = () => {
             )}
           </p>
           
-          <div className={`text-5xl font-bold mb-4 ${passed ? 'text-green-600' : 'text-red-600'}`}>
+          <div className={`text-5xl font-bold mb-4 text-center ${passed ? 'text-green-600' : 'text-red-600'}`}>
             {score}/100
           </div>
           
-          <p className="text-sm text-gray-400 mb-8">
+          <p className="text-sm text-gray-400 mb-8 text-center">
             Mínimo aprobatorio: 80/100
           </p>
           
           {attempt > 0 && (
-            <span className="inline-block bg-gray-100 text-gray-500 text-xs font-bold px-3 py-1 rounded-full mb-6">
+            <div className="text-center">
+              <span className="inline-block bg-gray-100 text-gray-500 text-xs font-bold px-3 py-1 rounded-full mb-6">
               Intento #{attempt}
-            </span>
+              </span>
+            </div>
           )}
 
-          {/* BOTÓN DE DESCARGA (Ahora siempre visible) */}
-          <button 
-            onClick={downloadPDF}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition shadow-lg flex items-center justify-center gap-2 mb-4 font-bold"
-          >
-            <FileDown size={20} /> Descargar Constancia
-          </button>
-          
-          <button 
-            onClick={handleGoHomeAndLogout} 
-            className="w-full bg-gray-100 text-gray-600 py-3 rounded-lg hover:bg-gray-200 transition font-medium"
-          >
-            Volver al Inicio
-          </button>
+          {/* --- NUEVO: Botón para mostrar resumen y el resumen condicional --- */}
+          {incorrectAnswers.length > 0 && !showErrorSummary && (
+            <div className="mt-8 text-center">
+              <button
+                onClick={() => setShowErrorSummary(true)}
+                className="text-blue-600 hover:text-blue-800 font-medium underline"
+              >
+                Ver resumen de errores
+              </button>
+            </div>
+          )}
+
+          {showErrorSummary && incorrectAnswers.length > 0 && (
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <h3 className="text-xl font-bold text-gray-700 mb-4 text-left">Resumen de Errores</h3>
+              <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
+                {incorrectAnswers.map((item, index) => (
+                  <div key={index} className="bg-gray-50 p-3 rounded-lg text-left text-sm">
+                    <p className="font-bold text-gray-800">{item.question}</p>
+                    <p className="mt-2 text-red-600"><span className="font-semibold">Tu respuesta:</span> {item.yourAnswer}</p>
+                    <p className="text-green-600"><span className="font-semibold">Respuesta correcta:</span> {item.correctAnswer}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 pt-6 border-t border-gray-200 space-y-4">
+            {/* BOTÓN DE DESCARGA */}
+            <button 
+              onClick={downloadPDF}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition shadow-lg flex items-center justify-center gap-2 font-bold"
+            >
+              <FileDown size={20} /> Descargar Constancia
+            </button>
+            
+            <button 
+              onClick={handleGoHomeAndLogout} 
+              className="w-full bg-gray-100 text-gray-600 py-3 rounded-lg hover:bg-gray-200 transition font-medium"
+            >
+              Volver al Inicio
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -477,7 +597,13 @@ const StudentExam = () => {
           <h2 className="text-4xl font-bold mb-4">¡ADVERTENCIA!</h2>
           <p className="text-xl mb-2">Has salido de la ventana del examen.</p>
           <p className="text-lg mb-8">Permanecer en esta página es obligatorio. Si sales de nuevo, el examen podría finalizarse.</p>
-          <p className="font-bold text-2xl mb-10">Advertencia {visibilityWarnings} de {MAX_VISIBILITY_WARNINGS}</p>
+          <div className="mb-10">
+            <p className="font-bold text-2xl">Advertencia {visibilityWarnings} de {MAX_VISIBILITY_WARNINGS}</p>
+            <div className="mt-4 bg-red bg-opacity-10 p-4 rounded-lg animate-pulse">
+              <p className="text-yellow-300 text-lg">Volver al examen o se cerrará en:</p>
+              <p className="font-mono text-6xl font-bold text-white">{warningCountdown}</p>
+            </div>
+          </div>
           <button onClick={() => setShowWarningModal(false)} className="bg-white text-red-700 font-bold px-10 py-4 rounded-lg text-xl">
             Entendido, volver al examen
           </button>
