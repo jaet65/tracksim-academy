@@ -165,7 +165,7 @@ const StudentExam = () => {
 
   // --- NUEVO: Pantalla de Descripción del Examen ---
   if (!descriptionAccepted) {
-    return <ExamDescription exam={exam} onAccept={() => setDescriptionAccepted(true)} />;
+    return <ExamDescription exam={exam} onAccept={() => setDescriptionAccepted(true)} onCancel={() => navigate('/portal')} />;
   }
 
   if (loading) return <div className="p-10 text-center">Cargando examen...</div>;
