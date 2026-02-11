@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
 import { collection, getDocs, doc, deleteDoc, orderBy, query } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { LogOut, ArrowLeft, Search, Trash2, Users } from 'lucide-react';
+import { LogOut, ArrowLeft, Search, Trash2, Users, List } from 'lucide-react';
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -119,6 +119,14 @@ const AdminUsers = () => {
                       <td className="p-4 text-sm text-gray-600">{user.email}</td>
                       <td className="p-4 text-sm text-gray-600">{user.company}</td>
                       <td className="p-4 text-right">
+                        <button
+                          onClick={() => navigate(`/admin/resultados?search=${encodeURIComponent(user.fullName)}`)}
+                          className="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-100 transition"
+                          title={`Ver resultados de ${user.fullName}`}
+                        >
+                          <List size={18} />
+                        </button>
+
                         {/* Solo mostrar el botón de eliminar si el usuario NO es admin */}
                         {!user.isAdmin && (
                           <button

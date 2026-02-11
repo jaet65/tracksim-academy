@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
 import { collection, getDocs, orderBy, query, doc, deleteDoc, addDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
@@ -12,6 +12,16 @@ const AdminResults = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
+  const location = useLocation(); // <-- NUEVO: Para leer la URL
+
+  // --- NUEVO: Leer el término de búsqueda desde la URL ---
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const searchQuery = params.get('search');
+    if (searchQuery) {
+      setSearchTerm(searchQuery);
+    }
+  }, [location.search]);
 
   // 1. Cargar resultados desde Firebase
   useEffect(() => {
