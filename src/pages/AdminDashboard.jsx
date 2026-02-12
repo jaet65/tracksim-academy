@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query, updateDoc } from 'firebase/firestore';
 import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
-import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download } from 'lucide-react';
+import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download, Paperclip, Link2 } from 'lucide-react';
 import { Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -22,6 +22,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [examTitle, setExamTitle] = useState(''); // Estado para el nombre del examen
   const [examDuration, setExamDuration] = useState(45); // <-- NUEVO: Estado para la duración
+  const [guideLink, setGuideLink] = useState(''); // <-- NUEVO: Para el hipervínculo de la guía
   const [exams, setExams] = useState([]);
   const [loadingExams, setLoadingExams] = useState(true);
   const [chartData, setChartData] = useState(null);
@@ -208,6 +209,7 @@ const AdminDashboard = () => {
             createdAt: new Date(),
             totalQuestions: questions.length,
             studyGuide: studyGuide, // <-- NUEVO: Guardamos la guía generada
+            supplementaryGuideUrl: guideLink.trim(), // <-- NUEVO: Guardamos el hipervínculo
             questions: questions
           };
 
@@ -218,6 +220,7 @@ const AdminDashboard = () => {
           // Limpiar formulario
           setExamTitle('');
           setExamDuration(45);
+          setGuideLink('');
           e.target.value = null;
           fetchExams(); // Recargar la lista de exámenes
 
@@ -264,6 +267,25 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error("Error actualizando examen:", error);
       alert("Hubo un error al guardar los cambios.");
+    }
+  };
+
+  // --- NUEVO: Lógica para añadir/editar el hipervínculo de la guía ---
+  const handleUpdateGuideLink = async (examId, currentLink) => {
+    const newLink = window.prompt("Pega el nuevo hipervínculo de la guía de estudio (Google Drive, etc.).\nDéjalo en blanco para eliminar el enlace actual.", currentLink || "");
+
+    // Si el usuario cancela el prompt, newLink será null
+    if (newLink === null) return;
+
+    try {
+      const examRef = doc(db, "exams", examId);
+      await updateDoc(examRef, { supplementaryGuideUrl: newLink.trim() });
+
+      alert("Hipervínculo de la guía actualizado con éxito.");
+      fetchExams(); // Recargamos la lista para mostrar/ocultar el ícono
+    } catch (error) {
+      console.error("Error actualizando el hipervínculo:", error);
+      alert("Hubo un error al actualizar el hipervínculo.");
     }
   };
 
@@ -375,6 +397,23 @@ const AdminDashboard = () => {
             </div>
           </div>
 
+          {/* NUEVO: Input para el hipervínculo de la guía */}
+          <div className="max-w-md mx-auto mb-8 text-left">
+            <label className="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">
+              Hipervínculo a Guía Complementaria (Opcional)
+            </label>
+            <div className="relative">
+              <Link2 className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
+              <input
+                type="url"
+                placeholder="Pega aquí el enlace de Google Drive, etc."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                value={guideLink}
+                onChange={(e) => setGuideLink(e.target.value)}
+              />
+            </div>
+          </div>
+
           {/* Área de carga de archivo */}
           <label className={`
             block w-full max-w-md mx-auto border-2 border-dashed rounded-lg p-8 cursor-pointer transition-all
@@ -427,10 +466,15 @@ const AdminDashboard = () => {
               {exams.map(exam => (
                 <li key={exam.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
                   <div className="flex justify-between items-start">
-                    <div>
-                    <p className="font-bold text-gray-800">{exam.title}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-gray-800">{exam.title}</p>
+                        {exam.supplementaryGuideUrl && exam.supplementaryGuideUrl.trim() !== '' && (
+                          <Paperclip className="w-4 h-4 text-gray-400" title="Contiene guía complementaria" />
+                        )}
+                      </div>
                       <p className="text-xs text-gray-500">
-                        {exam.totalQuestions} preguntas - Creado el {new Date(exam.createdAt.seconds * 1000).toLocaleDateString()}
+                        {exam.totalQuestions || 0} preguntas - Creado el {new Date(exam.createdAt.seconds * 1000).toLocaleDateString()}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -449,6 +493,11 @@ const AdminDashboard = () => {
                         <>
                           <span className="text-sm font-medium text-gray-600 bg-gray-200 px-2 py-1 rounded-md">{exam.duration || 'N/A'} min</span>
                           <button onClick={() => setEditingExamId(exam.id)} className="text-blue-600 p-2 rounded-full hover:bg-blue-100">Editar</button>
+                          <button 
+                            onClick={() => handleUpdateGuideLink(exam.id, exam.supplementaryGuideUrl)}
+                            className="text-teal-500 hover:text-teal-700 p-2 rounded-full hover:bg-teal-100 transition-colors"
+                            title="Añadir/Editar hipervínculo de guía"
+                          ><Link2 size={20} /></button>
                           <button
                             onClick={() => handleDeleteExam(exam.id, exam.title)}
                             className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors"
@@ -457,14 +506,7 @@ const AdminDashboard = () => {
                         </>
                       )}
                     </div>
-                  </div>                  
-                  <button
-                    onClick={() => handleDeleteExam(exam.id, exam.title)}
-                    className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors"
-                    title="Eliminar examen"
-                  >
-                    <Trash2 size={20} />
-                  </button>
+                  </div>
                 </li>
               ))}
             </ul>

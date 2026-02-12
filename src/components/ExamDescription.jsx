@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookText, ArrowRight, Clock, CheckCircle, Download, X, FileText, BrainCircuit, Star, Lightbulb } from 'lucide-react';
+import { BookText, ArrowRight, Clock, CheckCircle, Download, X, FileText, BrainCircuit, Star, Lightbulb, Paperclip } from 'lucide-react';
 import { useButtonCountdown } from '../hooks/useButtonCountdown';
 import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
 import jsPDF from 'jspdf';
@@ -223,10 +223,18 @@ const StudyGuideModal = ({ guide, onClose }) => {
           <Paragraph icon={<Star className="text-yellow-500" size={18}/>} title="Sugerencias Finales" content={guide.studyTips} />
         </main>
         <footer className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
-          <button onClick={handleDownload} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm font-medium">
-            <Download size={16} />
-            Descargar Guía (PDF)
-          </button>
+          <div className="flex items-center gap-4">
+            {guide.supplementaryGuideUrl && guide.supplementaryGuideUrl.trim() !== '' && (
+              <a href={guide.supplementaryGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-sm font-medium">
+                <Paperclip size={16} />
+                Ver Guía Adjunta
+              </a>
+            )}
+            <button onClick={handleDownload} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm font-medium">
+              <Download size={16} />
+              Descargar Guía Automática (PDF)
+            </button>
+          </div>
         </footer>
       </div>
     </div>
@@ -258,7 +266,10 @@ const ExamDescription = ({ exam, onAccept, onCancel }) => {
     if (!exam) return;
     // Usar la guía guardada si existe, si no, generarla (fallback)
     if (exam.studyGuide) {
-      setStudyGuideContent(exam.studyGuide);
+      setStudyGuideContent({
+        ...exam.studyGuide,
+        supplementaryGuideUrl: exam.supplementaryGuideUrl // Pasamos la URL al modal
+      });
     } else if (!studyGuideContent) { // Generar solo si no existe y no la hemos generado antes
       console.warn("Generando guía de estudio sobre la marcha. Considera volver a guardar el examen para cachearla.");
       setStudyGuideContent(generateStudyGuide(exam.questions, exam.title || 'Examen'));
