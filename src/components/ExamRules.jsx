@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Clock, EyeOff, ArrowRight, Wifi, BookX, UserX } from 'lucide-react';
+import { Clock, EyeOff, ArrowRight, Wifi, BookX, UserX, Coffee } from 'lucide-react';
 import logo from '../assets/Logo.gif';
 
 const ExamRules = ({ examDurationInSeconds, onAccept, onCancel }) => {
@@ -90,6 +90,13 @@ const ExamRules = ({ examDurationInSeconds, onAccept, onCancel }) => {
               <div>
                 <h3 className="font-bold text-lg">Conexión Estable</h3>
                 <p className="text-gray-500">Asegúrate de tener una conexión a internet estable. El sistema guardará tu progreso, pero una desconexión prolongada podría afectar tu tiempo.</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-4">
+              <Coffee className="w-7 h-7 text-green-500 mt-1 flex-shrink-0" />
+              <div>
+                <h3 className="font-bold text-lg">Secciones y Descansos</h3>
+                <p className="text-gray-500">El examen está dividido en secciones. Tendrás un descanso de <strong>5 minutos</strong> cada 60 preguntas o 20 minutos para que puedas relajarte.</p>
               </div>
             </li>
           </ul>

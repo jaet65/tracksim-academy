@@ -15,9 +15,14 @@ import { useAntiCheat } from '../hooks/useAntiCheat';
 import { useExamTimer } from '../hooks/useExamTimer'; // Assuming this hook will be modified to accept initial time
 import { formatTime as formatTimeUtil } from '../utils/timeUtils'; // Import utility formatTime
 import ExamDescription from '../components/ExamDescription'; // <-- NUEVO
-import ExamRules from '../components/ExamRules'; // <-- NUEVO
+import ExamRules from '../components/ExamRules';
+import BreakScreen from '../components/BreakScreen'; // <-- NUEVO: Pantalla de descanso
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
+// --- NUEVO: Constantes para los descansos ---
+const BREAK_INTERVAL_QUESTIONS = 60; // Descanso cada 60 preguntas
+const BREAK_INTERVAL_TIME_SECONDS = 20 * 60; // Descanso cada 20 minutos
+const BREAK_DURATION_SECONDS = 5 * 60; // Duración del descanso de 5 minutos
 
 const StudentExam = () => {
   const { id } = useParams(); // Obtenemos el ID del examen desde la URL
@@ -34,16 +39,24 @@ const StudentExam = () => {
   const [rulesAccepted, setRulesAccepted] = useState(false); // <-- Nuevo estado
   const [showErrorSummary, setShowErrorSummary] = useState(false); // <-- Nuevo estado para mostrar errores
   const [displayTimeTaken, setDisplayTimeTaken] = useState(0); // New state to store time taken for display
+  // --- NUEVO: Estados para el descanso ---
+  const [onBreak, setOnBreak] = useState(false);
+  const [breaksTaken, setBreaksTaken] = useState({ questions: 0, time: 0 });
 
   // --- Uso de Hooks Personalizados ---
   const { exam, loading } = useExamData(id);
   const { currentQuestionIndex, setCurrentQuestionIndex, answers, handleSelectOption, clearProgress } = useExamProgress(exam, id, finished);
   const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound } = useAntiCheat(descriptionAccepted && rulesAccepted && !finished, () => finishExam(true));  // --- NUEVO: Duración dinámica del examen ---
   const examDurationInSeconds = exam?.duration ? exam.duration * 60 : 45 * 60;
-
+  
   const onTimeUp = () => { setTimeUp(true); finishExam(); };
   // Pasamos la duración dinámica al hook del temporizador
-  const { timeLeft, formatTime, initialTimeInSeconds } = useExamTimer(finished || loading || !rulesAccepted || !descriptionAccepted, onTimeUp, examDurationInSeconds);
+  // --- MODIFICADO: Pausar el timer durante el descanso ---
+  const { timeLeft, formatTime, initialTimeInSeconds } = useExamTimer(
+    finished || loading || !rulesAccepted || !descriptionAccepted || onBreak, // Pausar si está en descanso
+    onTimeUp, 
+    examDurationInSeconds
+  );
 
   // --- DEBUG: Console logs para verificar el flujo de datos (eliminados) ---
   
@@ -64,6 +77,35 @@ const StudentExam = () => {
       event.returnValue = ''; // Chrome requires returnValue to be set
     }
   }, [finished]));
+
+  // --- NUEVO: Lógica para activar los descansos ---
+  useEffect(() => {
+    if (loading || !exam || finished || onBreak) return;
+
+    // Condición 1: Descanso por número de preguntas
+    const questionBreakThreshold = (breaksTaken.questions + 1) * BREAK_INTERVAL_QUESTIONS;
+    if (currentQuestionIndex > 0 && (currentQuestionIndex + 1) === questionBreakThreshold && currentQuestionIndex + 1 < exam.questions.length) {
+      setOnBreak(true);
+      setBreaksTaken(prev => ({ ...prev, questions: prev.questions + 1 }));
+      console.log(`Activando descanso por preguntas. Pregunta actual: ${currentQuestionIndex + 1}`);
+      console.log(`Tiempo restante: ${formatTimeUtil(timeLeft)}`);
+      return; // Salimos para no evaluar la condición de tiempo
+    }
+
+    // Condición 2: Descanso por tiempo transcurrido
+    const timeElapsed = initialTimeInSeconds - timeLeft;
+    const timeBreakThreshold = (breaksTaken.time + 1) * BREAK_INTERVAL_TIME_SECONDS;
+    // Se activa si el tiempo transcurrido supera el umbral y no estamos cerca del final del examen
+    if (timeElapsed >= timeBreakThreshold && timeLeft > BREAK_DURATION_SECONDS) {
+      setOnBreak(true);
+      setBreaksTaken(prev => ({ ...prev, time: prev.time + 1 }));
+      console.log(`Activando descanso por tiempo. Tiempo transcurrido: ${formatTimeUtil(timeElapsed)}`);
+      console.log(`Tiempo restante: ${formatTimeUtil(timeLeft)}`);
+    }
+  }, [currentQuestionIndex, timeLeft, loading, exam, finished, onBreak, breaksTaken, initialTimeInSeconds]);
+
+  // --- NUEVO: Función para terminar el descanso ---
+  const handleBreakFinish = () => setOnBreak(false);
 
   // 4. Finalizar y Calificar
   const finishExam = useCallback(async (isCheating = false) => {
@@ -408,6 +450,16 @@ const StudentExam = () => {
           </button>
         </div>
       </div>
+    );
+  }
+
+  // --- NUEVO: Pantalla de Descanso ---
+  if (onBreak) {
+    return (
+      <BreakScreen 
+        durationInSeconds={BREAK_DURATION_SECONDS}
+        onBreakFinish={handleBreakFinish}
+      />
     );
   }
 
