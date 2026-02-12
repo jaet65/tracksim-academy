@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import Tictoc from '../assets/sounds/tick-tock.mp3'; // <-- NUEVO: Importamos el sonido
+
 
 const MAX_VISIBILITY_WARNINGS = 2;
 
@@ -7,12 +9,8 @@ export const useAntiCheat = (isExamActive, onCheatDetected) => {
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [warningCountdown, setWarningCountdown] = useState(30);
   const [isFullscreen, setIsFullscreen] = useState(document.fullscreenElement != null);
-  const [tickTockSound] = useState(() => {
-    const audio = new Audio('/sounds/tick-tock.mp3');
-    audio.volume = 1.0;
-    return audio;
-  });
-
+  const tickTockSound = useRef(new Audio(Tictoc)); // <-- NUEVO: Ref para el audio
+  
   const requestFullscreen = useCallback(() => {
     document.documentElement.requestFullscreen().catch(err => {
       alert(`Error al entrar en pantalla completa: ${err.message}.`);
@@ -63,9 +61,10 @@ export const useAntiCheat = (isExamActive, onCheatDetected) => {
 
   useEffect(() => {
     if (showWarningModal) {
-      tickTockSound.loop = true;
-      tickTockSound.playbackRate = warningCountdown <= 10 ? 1.5 : 1.0;
-      tickTockSound.play().catch(e => console.error("Error al reproducir sonido:", e));
+      const audio = tickTockSound.current;
+      audio.loop = true;
+      audio.playbackRate = warningCountdown <= 10 ? 1.5 : 1.0;
+      audio.play().catch(e => console.error("Error al reproducir sonido:", e));
 
       if (warningCountdown <= 0) {
         onCheatDetected();
@@ -75,16 +74,17 @@ export const useAntiCheat = (isExamActive, onCheatDetected) => {
       const timer = setInterval(() => setWarningCountdown(prev => prev - 1), 1000);
       return () => clearInterval(timer);
     } else {
-      tickTockSound.pause();
-      tickTockSound.currentTime = 0;
-      tickTockSound.playbackRate = 1.0;
+      const audio = tickTockSound.current;
+      audio.pause();
+      audio.currentTime = 0;
+      audio.playbackRate = 1.0;
     }
-  }, [showWarningModal, warningCountdown, onCheatDetected, tickTockSound]);
+  }, [showWarningModal, warningCountdown, onCheatDetected]);
 
   const stopSound = useCallback(() => {
-    tickTockSound.pause();
-    tickTockSound.currentTime = 0;
-  }, [tickTockSound]);
+    tickTockSound.current.pause();
+    tickTockSound.current.currentTime = 0;
+  }, []);
 
   return { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound };
 };

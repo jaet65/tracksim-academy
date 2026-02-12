@@ -20,9 +20,9 @@ import BreakScreen from '../components/BreakScreen'; // <-- NUEVO: Pantalla de d
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 // --- NUEVO: Constantes para los descansos ---
-const BREAK_INTERVAL_QUESTIONS = 60; // Descanso cada 60 preguntas
+const BREAK_INTERVAL_QUESTIONS = 6; // Descanso cada 60 preguntas
 const BREAK_INTERVAL_TIME_SECONDS = 20 * 60; // Descanso cada 20 minutos
-const BREAK_DURATION_SECONDS = 5 * 60; // Duración del descanso de 5 minutos
+const BREAK_DURATION_SECONDS = 1 * 31; // Duración del descanso de 5 minutos
 
 const StudentExam = () => {
   const { id } = useParams(); // Obtenemos el ID del examen desde la URL
