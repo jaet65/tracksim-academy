@@ -20,9 +20,9 @@ import BreakScreen from '../components/BreakScreen'; // <-- NUEVO: Pantalla de d
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 // --- NUEVO: Constantes para los descansos ---
-const BREAK_INTERVAL_QUESTIONS = 6; // Descanso cada 60 preguntas
+const BREAK_INTERVAL_QUESTIONS = 60; // Descanso cada 60 preguntas
 const BREAK_INTERVAL_TIME_SECONDS = 20 * 60; // Descanso cada 20 minutos
-const BREAK_DURATION_SECONDS = 1 * 31; // Duración del descanso de 5 minutos
+const BREAK_DURATION_SECONDS = 5 * 60; // Duración del descanso de 5 minutos
 
 const StudentExam = () => {
   const { id } = useParams(); // Obtenemos el ID del examen desde la URL
@@ -42,6 +42,7 @@ const StudentExam = () => {
   // --- NUEVO: Estados para el descanso ---
   const [onBreak, setOnBreak] = useState(false);
   const [breaksTaken, setBreaksTaken] = useState({ questions: 0, time: 0 });
+  const [breakTimeLeft, setBreakTimeLeft] = useState(BREAK_DURATION_SECONDS); // <-- NUEVO: Estado para el tiempo de descanso
 
   // --- Uso de Hooks Personalizados ---
   const { exam, loading } = useExamData(id);
@@ -84,8 +85,9 @@ const StudentExam = () => {
 
     // Condición 1: Descanso por número de preguntas
     const questionBreakThreshold = (breaksTaken.questions + 1) * BREAK_INTERVAL_QUESTIONS;
-    if (currentQuestionIndex > 0 && (currentQuestionIndex + 1) === questionBreakThreshold && currentQuestionIndex + 1 < exam.questions.length) {
+    if (currentQuestionIndex > 0 && (currentQuestionIndex + 1) >= questionBreakThreshold && currentQuestionIndex + 1 < exam.questions.length) {
       setOnBreak(true);
+      setBreakTimeLeft(BREAK_DURATION_SECONDS); // Reiniciamos el contador de descanso
       setBreaksTaken(prev => ({ ...prev, questions: prev.questions + 1 }));
       console.log(`Activando descanso por preguntas. Pregunta actual: ${currentQuestionIndex + 1}`);
       console.log(`Tiempo restante: ${formatTimeUtil(timeLeft)}`);
@@ -98,13 +100,32 @@ const StudentExam = () => {
     // Se activa si el tiempo transcurrido supera el umbral y no estamos cerca del final del examen
     if (timeElapsed >= timeBreakThreshold && timeLeft > BREAK_DURATION_SECONDS) {
       setOnBreak(true);
+      setBreakTimeLeft(BREAK_DURATION_SECONDS); // Reiniciamos el contador de descanso
       setBreaksTaken(prev => ({ ...prev, time: prev.time + 1 }));
       console.log(`Activando descanso por tiempo. Tiempo transcurrido: ${formatTimeUtil(timeElapsed)}`);
       console.log(`Tiempo restante: ${formatTimeUtil(timeLeft)}`);
     }
   }, [currentQuestionIndex, timeLeft, loading, exam, finished, onBreak, breaksTaken, initialTimeInSeconds]);
 
-  // --- NUEVO: Función para terminar el descanso ---
+  // --- NUEVO: Lógica para el temporizador del descanso (movida aquí) ---
+  useEffect(() => {
+    // El temporizador solo corre si estamos en descanso Y no se muestra la advertencia anti-trampas.
+    if (!onBreak || showWarningModal) {
+      return;
+    }
+
+    if (breakTimeLeft <= 0) {
+      handleBreakFinish();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setBreakTimeLeft(prev => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [onBreak, breakTimeLeft, showWarningModal]);
+
   const handleBreakFinish = () => setOnBreak(false);
 
   // 4. Finalizar y Calificar
@@ -454,11 +475,12 @@ const StudentExam = () => {
   }
 
   // --- NUEVO: Pantalla de Descanso ---
-  if (onBreak) {
+  if (onBreak && !showWarningModal) {
     return (
       <BreakScreen 
+        timeLeft={breakTimeLeft} // <-- Pasamos el tiempo restante
         durationInSeconds={BREAK_DURATION_SECONDS}
-        onBreakFinish={handleBreakFinish}
+        onBreakFinish={handleBreakFinish} // onBreakFinish ya no se usa en BreakScreen, pero lo dejamos por si acaso
       />
     );
   }
