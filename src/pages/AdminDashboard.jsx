@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query, updateDoc } from 'firebase/firestore';
+import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
 import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download } from 'lucide-react';
 import { Pie } from 'react-chartjs-2';
 import {
@@ -197,12 +198,16 @@ const AdminDashboard = () => {
             return;
           }
 
+          // Generar la guía de estudio
+          const studyGuide = generateStudyGuide(questions, examTitle.trim());
+
           // 2. USAR EL NOMBRE PERSONALIZADO
           const examData = {
             title: examTitle.trim(), // <--- Aquí usamos lo que escribiste
             duration: Number(examDuration), // <-- NUEVO: Guardamos la duración en minutos
             createdAt: new Date(),
             totalQuestions: questions.length,
+            studyGuide: studyGuide, // <-- NUEVO: Guardamos la guía generada
             questions: questions
           };
 
