@@ -25,7 +25,7 @@ const ExamRules = ({ examDurationInSeconds, onAccept, onCancel }) => {
         } else {
           window.scrollBy(0, 1); // Ajusta el segundo valor para cambiar la velocidad. 1 es lento y suave.
         }
-      }, 30); // Ajusta este valor para la fluidez. 30ms es un buen punto de partida.
+      }, 80); // Ajusta este valor para la fluidez. 30ms es un buen punto de partida.
     }, 2000); // Espera de 2 segundos antes de iniciar.
 
     const handleManualScroll = () => {
@@ -50,7 +50,7 @@ const ExamRules = ({ examDurationInSeconds, onAccept, onCancel }) => {
     <div className="min-h-screen bg-gray-100 flex justify-center p-4 pt-12">
       <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full text-center">
         <div className="text-center">
-          <img src={logo} alt="Logo" className="h-12 mx-auto mb-4" />
+          <img src={logo} alt="Logo" className="h-40 mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-gray-800 mb-4">Reglas de la Evaluación</h1>
           <p className="text-gray-600 mb-8">Por favor, lee atentamente las siguientes instrucciones antes de comenzar.</p>
         </div>
@@ -65,10 +65,24 @@ const ExamRules = ({ examDurationInSeconds, onAccept, onCancel }) => {
               </div>
             </li>
             <li className="flex items-start gap-4">
+              <Coffee className="w-7 h-7 text-green-500 mt-1 flex-shrink-0" />
+              <div>
+                <h3 className="font-bold text-lg">Descansos</h3>
+                <p className="text-gray-500">Tendrás un descanso de <strong>5 minutos</strong> cada 60 preguntas o 30 minutos para que puedas relajarte. Descuida el tiempo se pausará durante el descanso.</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-4">
+              <Wifi className="w-7 h-7 text-teal-500 mt-1 flex-shrink-0" />
+              <div>
+                <h3 className="font-bold text-lg">Conexión Estable</h3>
+                <p className="text-gray-500">Asegúrate de tener una conexión a internet estable. El sistema guardará tu progreso, pero una desconexión prolongada podría afectar tu tiempo.</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-4">
               <EyeOff className="w-7 h-7 text-red-500 mt-1 flex-shrink-0" />
               <div>
                 <h3 className="font-bold text-lg">No Salir de la Pantalla</h3>
-                <p className="text-gray-500">El examen debe realizarse en pantalla completa. Si sales de la pestaña o minimizas la ventana, recibirás una advertencia. Después de <strong>2 advertencias</strong>, el examen finalizará automáticamente.</p>
+                <p className="text-gray-500">El examen debe realizarse en pantalla completa. Si sales de la pestaña o minimizas la ventana, recibirás una advertencia. Después de <strong>2 advertencias</strong>, el examen finalizará automáticamente, <strong>incluso durante el descanso.</strong></p>
               </div>
             </li>
             <li className="flex items-start gap-4">
@@ -83,20 +97,6 @@ const ExamRules = ({ examDurationInSeconds, onAccept, onCancel }) => {
               <div>
                 <h3 className="font-bold text-lg">Trabajo Individual</h3>
                 <p className="text-gray-500">Esta es una evaluación individual. No está permitida la comunicación o ayuda de otras personas.</p>
-              </div>
-            </li>
-            <li className="flex items-start gap-4">
-              <Wifi className="w-7 h-7 text-teal-500 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-bold text-lg">Conexión Estable</h3>
-                <p className="text-gray-500">Asegúrate de tener una conexión a internet estable. El sistema guardará tu progreso, pero una desconexión prolongada podría afectar tu tiempo.</p>
-              </div>
-            </li>
-            <li className="flex items-start gap-4">
-              <Coffee className="w-7 h-7 text-green-500 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-bold text-lg">Secciones y Descansos</h3>
-                <p className="text-gray-500">El examen está dividido en secciones. Tendrás un descanso de <strong>5 minutos</strong> cada 60 preguntas o 20 minutos para que puedas relajarte.</p>
               </div>
             </li>
           </ul>
