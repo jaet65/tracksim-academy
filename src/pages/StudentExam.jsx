@@ -384,7 +384,7 @@ const StudentExam = () => {
         )}
         {/* --- NUEVO: Notificación de tiempo agotado --- */}
         {showTimeUpNotification && (
-          <div className="fixed top-0 left-0 right-0 bg-red-500 text-white p-3 text-center font-bold z-50 shadow-lg">
+          <div className="fixed bottom-0 left-0 right-0 bg-red-500 text-white p-3 text-center font-bold z-50 shadow-lg">
             <div className="flex items-center justify-center gap-2">
               <Clock />
               ¡El tiempo se ha agotado!
@@ -577,7 +577,7 @@ const StudentExam = () => {
     >
       {/* --- NUEVO: Notificación de tiempo restante --- */}
       {showTimeWarning && (
-        <div className="fixed top-0 left-0 right-0 bg-yellow-400 text-yellow-900 p-3 text-center font-bold z-50 shadow-lg animate-pulse">
+        <div className="fixed bottom-0 left-0 right-0 bg-yellow-400 text-yellow-900 p-3 text-center font-bold z-50 shadow-lg animate-pulse">
           <div className="flex items-center justify-center gap-2">
             <AlertCircle />
             ¡Queda 1 minuto para finalizar el examen!
