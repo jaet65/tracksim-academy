@@ -362,7 +362,7 @@ const StudentExam = () => {
             };
 
             // Llamamos a la nueva función
-            generateConstancia(studentPDFData, examPDFData, score, incorrectAnswers);
+            generateConstancia(studentPDFData, examPDFData, score, undefined, incorrectAnswers);
          }
        } catch(e) {
          console.error(e);

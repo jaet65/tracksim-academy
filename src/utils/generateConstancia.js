@@ -1,7 +1,9 @@
 import jsPDF from 'jspdf';
 import logo from '../assets/Logo.png'; // Importamos el logo
+import passIcon from '../assets/pass.png'; // NUEVO: Ícono de aprobado
+import crossIcon from '../assets/cross.png'; // NUEVO: Ícono de reprobado
 
-export const generateConstancia = (studentData, examData, score, incorrectAnswers) => {
+export const generateConstancia = (studentData, examData, score, simulatorScore, incorrectAnswers) => {
   const doc = new jsPDF();
   const today = new Date();
   const dateStr = today.toLocaleDateString();
@@ -73,13 +75,73 @@ export const generateConstancia = (studentData, examData, score, incorrectAnswer
   doc.text(dateStr, 95, currentY);
   currentY += 7;
 
+  // --- MODIFICADO: Función para usar imágenes como íconos ---
+  const drawStatusIcon = (doc, x, y, isPassed) => {
+    const iconSize = 4; // Tamaño del ícono en mm
+    if (isPassed) {
+      doc.addImage(passIcon, 'PNG', x, y - (iconSize / 2) - 1, iconSize, iconSize);
+    } else {
+      doc.addImage(crossIcon, 'PNG', x, y - (iconSize / 2) - 1, iconSize, iconSize);
+    }
+  };
+
+  // --- MODIFICADO: Bloque de calificaciones ---
   doc.setFont("helvetica", "normal");
-  doc.text(`Calificación Obtenida:`, 50, currentY);
+  doc.text(`Calificación Examen:`, 50, currentY);
   doc.setFont("helvetica", "bold");
-  doc.text(`${score}/100`, 95, currentY);
-  currentY += 10;
+  const isExamPassed = score >= 60;
+  drawStatusIcon(doc, 105, currentY - 1, isExamPassed);
+  doc.text(`${score}/100`, 112, currentY);
+  currentY += 7;
+
+  doc.setFont("helvetica", "normal");
+  doc.text(`Calificación Simulador:`, 50, currentY);
+  doc.setFont("helvetica", "bold");
+  if (simulatorScore !== undefined && simulatorScore !== null) {
+    const isSimulatorPassed = Number(simulatorScore) >= 60;
+    drawStatusIcon(doc, 105, currentY - 1, isSimulatorPassed);
+    doc.text(`${simulatorScore}/100`, 112, currentY);
+    currentY += 7;
+
+    doc.setFont("helvetica", "normal");
+    doc.text(`Promedio Final:`, 50, currentY);
+    doc.setFont("helvetica", "bold");
+    const average = (score + Number(simulatorScore)) / 2;
+    doc.text(`${average.toFixed(1)}/100`, 105, currentY);
+    currentY += 10;
+  } else {
+    // Color gris para el texto "Pendiente"
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Pendiente`, 105, currentY);
+    doc.setTextColor(0, 0, 0); // Reset a negro
+    currentY += 10;
+  }
 
   let yPosition = currentY; // Posición inicial para el contenido dinámico
+  const passed = score >= 60;
+  const finalMessage = passed
+    ? "¡Felicidades! Has demostrado un excelente dominio de los conocimientos. Sigue así y continúa fortaleciendo tus habilidades para un futuro profesional exitoso.\n\nSi el resultado de tus ejercicios en el simulador es aprobatorio, recibirás tu constancia DC-3 vía correo electrónico. Sigamos trabajando juntos por la seguridad vial."
+    : "No te desanimes. Cada evaluación es una oportunidad para aprender y crecer. Revisa tus errores, refuerza los temas y prepárate para el siguiente reto. ¡Tú puedes!";
+
+  // --- NUEVO: Mensaje si falta la nota del simulador (movido antes de los errores) ---
+  if (simulatorScore === undefined || simulatorScore === null) {
+    const pendingMessage = "Consulta tus resultados aquí próximamente. Recuerda que, al obtener una calificación aprobatoria en el simulador y en el examen, obtendrás tu formato DC-3.";
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "italic");
+    const splitPendingMessage = doc.splitTextToSize(pendingMessage, 180);
+    doc.text(splitPendingMessage, 105, yPosition, { align: "center" });
+    yPosition += (splitPendingMessage.length * 5) + 5; // Ajustamos la posición para lo que sigue
+  }
+
+  // --- MODIFICADO: El mensaje de motivación/felicitación ahora se muestra siempre ---
+  // El mensaje de felicitación solo se muestra si la nota del simulador está presente.
+  if ((passed && simulatorScore !== undefined && simulatorScore !== null) || !passed) {
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "italic");
+    const splitMessage = doc.splitTextToSize(finalMessage, 180);
+    doc.text(splitMessage, 105, yPosition, { align: "center" });
+    yPosition += (splitMessage.length * 5) + 5;
+  }
 
   // --- 3. RESUMEN DE ERRORES ---
   if (incorrectAnswers.length > 0) {
@@ -120,21 +182,6 @@ export const generateConstancia = (studentData, examData, score, incorrectAnswer
   } else {
     yPosition += 15; // Si no hay errores, dejamos un espacio
   }
-
-  // --- 4. MENSAJE FINAL (FELICITACIÓN O MOTIVACIÓN) ---
-  const passed = score >= 60;
-  const finalMessage = passed
-    ? "¡Felicidades! Has demostrado un excelente dominio de los conocimientos. Sigue así y continúa fortaleciendo tus habilidades para un futuro profesional exitoso.\n\nSi el resultado de tus ejercicios en el simulador es aprobatorio, recibirás tu constancia DC-3 vía correo electrónico. Sigamos trabajando juntos por la seguridad vial."
-    : "No te desanimes. Cada evaluación es una oportunidad para aprender y crecer. Revisa tus errores, refuerza los temas y prepárate para el siguiente reto. ¡Tú puedes!";
-
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "italic");
-
-  // Dividimos el texto para que quepa en el ancho de la página
-  const splitMessage = doc.splitTextToSize(finalMessage, 180);
-
-  // Centramos el texto
-  doc.text(splitMessage, 105, yPosition, { align: "center" });
 
   // --- 5. PIE DE PÁGINA ---
   const footerText = "¡Revisa que tu información esté correcta! Estos datos aparecerán en tu certificación DC-3. Si necesitas corregir algo, escribe a magraz@tracksim.mx o avisa a tu coordinador local.";

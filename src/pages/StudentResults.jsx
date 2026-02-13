@@ -94,7 +94,7 @@ const StudentResults = () => {
       }))
       .filter(item => !item.isCorrect);
 
-    generateConstancia(studentPDFData, examPDFData, result.score, incorrectAnswers);
+    generateConstancia(studentPDFData, examPDFData, result.score, result.simulatorScore, incorrectAnswers);
   };
 
   if (loading) {

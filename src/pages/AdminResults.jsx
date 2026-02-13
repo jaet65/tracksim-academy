@@ -694,7 +694,7 @@ const AdminResults = () => {
                                   isCorrect: r.studentAnswers[index] === q.correctOption
                                 }))
                                 .filter(item => !item.isCorrect);
-                              generateConstancia(studentPDFData, examPDFData, r.score, incorrectAnswers);
+                              generateConstancia(studentPDFData, examPDFData, r.score, r.simulatorScore, incorrectAnswers);
                             }}
                             className="text-gray-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-100 transition"
                             title="Descargar Constancia de Participación"
