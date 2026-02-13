@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useBeforeUnload } from 'react-router-dom';
-import { db, auth } from '../firebase-config';
+import { db, auth } from '../firebase-config'; // <-- NUEVO
 import { doc, getDoc, addDoc, collection, query, where, getDocs, limit, deleteDoc, orderBy } from 'firebase/firestore';
 import { FileDown, Clock, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, EyeOff, Maximize, ArrowRight } from 'lucide-react';
 import logo from '../assets/Logo.png'; // Importamos el logo
@@ -16,6 +16,8 @@ import { useExamTimer } from '../hooks/useExamTimer'; // Assuming this hook will
 import { formatTime as formatTimeUtil } from '../utils/timeUtils'; // Import utility formatTime
 import ExamDescription from '../components/ExamDescription'; // <-- NUEVO
 import ExamRules from '../components/ExamRules';
+import StudyGuideModal from '../components/StudyGuideModal'; // <-- NUEVO
+import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
 import BreakScreen from '../components/BreakScreen'; // <-- NUEVO: Pantalla de descanso
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
@@ -43,6 +45,9 @@ const StudentExam = () => {
   const [onBreak, setOnBreak] = useState(false);
   const [breaksTaken, setBreaksTaken] = useState({ questions: 0, time: 0 });
   const [breakTimeLeft, setBreakTimeLeft] = useState(BREAK_DURATION_SECONDS); // <-- NUEVO: Estado para el tiempo de descanso
+  // --- NUEVO: Estados para la guía de estudio ---
+  const [showStudyGuide, setShowStudyGuide] = useState(false);
+  const [studyGuideContent, setStudyGuideContent] = useState(null);
 
   // --- Uso de Hooks Personalizados ---
   const { exam, loading } = useExamData(id);
@@ -127,6 +132,23 @@ const StudentExam = () => {
   }, [onBreak, breakTimeLeft, showWarningModal]);
 
   const handleBreakFinish = () => setOnBreak(false);
+
+  // --- NUEVO: Lógica para mostrar la guía de estudio (movida aquí) ---
+  const handleShowGuide = () => {
+    if (!exam) return;
+    // Usar la guía guardada si existe, si no, generarla (fallback)
+    if (exam.studyGuide) {
+      setStudyGuideContent({
+        ...exam.studyGuide,
+        supplementaryGuideUrl: exam.supplementaryGuideUrl // Pasamos la URL al modal
+      });
+    } else if (!studyGuideContent) { // Generar solo si no existe y no la hemos generado antes
+      console.warn("Generando guía de estudio sobre la marcha. Considera volver a guardar el examen para cachearla.");
+      setStudyGuideContent(generateStudyGuide(exam.questions, exam.title || 'Examen'));
+    }
+    setShowStudyGuide(true);
+  };
+
 
   // 4. Finalizar y Calificar
   const finishExam = useCallback(async (isCheating = false) => {
@@ -228,7 +250,12 @@ const StudentExam = () => {
 
   // --- NUEVO: Pantalla de Descripción del Examen ---
   if (!descriptionAccepted) {
-    return <ExamDescription exam={exam} onAccept={() => setDescriptionAccepted(true)} onCancel={() => navigate('/portal')} />;
+    return (
+      <>
+        <ExamDescription exam={exam} onAccept={() => setDescriptionAccepted(true)} onCancel={() => navigate('/portal')} onShowGuide={handleShowGuide} />
+        {showStudyGuide && <StudyGuideModal guide={studyGuideContent} onClose={() => setShowStudyGuide(false)} />}
+      </>
+    );
   }
 
   if (loading) return <div className="p-10 text-center">Cargando examen...</div>;
@@ -247,11 +274,16 @@ const StudentExam = () => {
   // --- NUEVO: Pantalla de Reglas ---
   if (!rulesAccepted) {
     return (
-      <ExamRules 
-        examDurationInSeconds={examDurationInSeconds}
-        onAccept={handleAcceptRulesAndFullscreen}
-        onCancel={() => navigate('/portal')}
-      />
+      <>
+        <ExamRules 
+          examDurationInSeconds={examDurationInSeconds}
+          onAccept={handleAcceptRulesAndFullscreen}
+          onCancel={() => navigate('/portal')}
+          onShowGuide={handleShowGuide} // <-- Pasamos la función
+          supplementaryGuideUrl={exam?.supplementaryGuideUrl} // <-- NUEVO: Pasamos la URL del adjunto
+        />
+        {showStudyGuide && <StudyGuideModal guide={studyGuideContent} onClose={() => setShowStudyGuide(false)} />}
+      </>
     );
   }
 

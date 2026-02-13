@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // <-- CORRECCIÓN: Mantener useEffect
 import { BookText, ArrowRight, Clock, CheckCircle, Download, X } from 'lucide-react';
 import { useButtonCountdown } from '../hooks/useButtonCountdown';
-import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
-import StudyGuideModal from './StudyGuideModal'; // <-- NUEVO
 
 // La lógica para generar el resumen se encapsula aquí.
 const generateExamSummary = (questions) => {
@@ -88,12 +86,10 @@ const generateExamSummary = (questions) => {
   return [chosenTemplate.title, chosenTemplate.description + skillsTest];
 };
 
-const ExamDescription = ({ exam, onAccept, onCancel }) => {
+const ExamDescription = ({ exam, onAccept, onCancel, onShowGuide }) => {
   const [summary, setSummary] = useState({ title: "Descripción de la Evaluación", description: "Cargando análisis del contenido..." });
   const { countdown, isButtonDisabled, showCheckAnimation } = useButtonCountdown(3);
-  const [showStudyGuide, setShowStudyGuide] = useState(false);
-  const [studyGuideContent, setStudyGuideContent] = useState(null);
-
+  
   useEffect(() => {
     if (exam) {
       // 1. Prioridad: Usar la descripción pre-generada si existe en la BD.
@@ -108,21 +104,6 @@ const ExamDescription = ({ exam, onAccept, onCancel }) => {
       }
     }
   }, [exam]);
-
-  const handleShowGuide = () => {
-    if (!exam) return;
-    // Usar la guía guardada si existe, si no, generarla (fallback)
-    if (exam.studyGuide) {
-      setStudyGuideContent({
-        ...exam.studyGuide,
-        supplementaryGuideUrl: exam.supplementaryGuideUrl // Pasamos la URL al modal
-      });
-    } else if (!studyGuideContent) { // Generar solo si no existe y no la hemos generado antes
-      console.warn("Generando guía de estudio sobre la marcha. Considera volver a guardar el examen para cachearla.");
-      setStudyGuideContent(generateStudyGuide(exam.questions, exam.title || 'Examen'));
-    }
-    setShowStudyGuide(true);
-  };
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
@@ -144,18 +125,20 @@ const ExamDescription = ({ exam, onAccept, onCancel }) => {
             <>Entendido, continuar a las reglas <ArrowRight size={20} /></>
           )}
         </button>
-        <div className="mt-6 flex justify-center items-center gap-6">
-          <button onClick={handleShowGuide} className="text-sm text-blue-600 hover:text-blue-800 transition font-medium flex items-center gap-2">
-            <Download size={16} />
-            Ver Guía de Estudio
+        <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+          <button 
+            onClick={onShowGuide} 
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-orange-400 text-white px-6 py-3 rounded-lg hover:bg-orange-500 transition shadow-md font-semibold"
+          >
+            <Download size={18} />
+            Ver guia de estudio
           </button>
-          <span className="text-gray-300">|</span>
-          <button onClick={onCancel} className="text-sm text-gray-500 hover:text-gray-700 transition font-medium">
+          <span className="text-gray-300 hidden sm:inline">|</span>
+          <button onClick={onCancel} className="w-full sm:w-auto text-sm text-gray-500 hover:text-gray-700 transition font-medium py-2">
             Volver al portal
           </button>
         </div>
       </div>
-      {showStudyGuide && <StudyGuideModal guide={studyGuideContent} onClose={() => setShowStudyGuide(false)} />}
     </div>
   );
 };

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Clock, EyeOff, ArrowRight, Wifi, BookX, UserX, Coffee } from 'lucide-react';
+import { Clock, EyeOff, ArrowRight, Wifi, BookX, UserX, Coffee, AlertTriangle } from 'lucide-react';
 import logo from '../assets/Logo.gif';
 
-const ExamRules = ({ examDurationInSeconds, onAccept, onCancel }) => {
+const ExamRules = ({ examDurationInSeconds, onAccept, onCancel, onShowGuide, supplementaryGuideUrl }) => {
   const [isScrolledToEnd, setIsScrolledToEnd] = useState(false);
 
   // Efecto para el autoscroll suave
@@ -92,6 +92,18 @@ const ExamRules = ({ examDurationInSeconds, onAccept, onCancel }) => {
                 <p className="text-gray-500">No está permitido el uso de libros, notas, buscadores de internet u otro material de apoyo durante la evaluación.</p>
               </div>
             </li>
+            {/* --- NUEVO: Recordatorio para la guía de estudio --- */}
+            {supplementaryGuideUrl && (
+              <li className="flex items-start gap-4">
+                <AlertTriangle className="w-7 h-7 text-red-500 mt-1 flex-shrink-0" />
+                <div>
+                  <h3 className="font-bold text-lg">Guia de estudio</h3>
+                  <a href={supplementaryGuideUrl} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:text-red-800 underline text-left">
+                    Te sugiero revisar la guía adjunta ahora, ya que después no estará disponible para consulta.
+                  </a>
+                </div>
+              </li>
+            )}
             <li className="flex items-start gap-4">
               <UserX className="w-7 h-7 text-purple-500 mt-1 flex-shrink-0" />
               <div>
