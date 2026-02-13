@@ -108,7 +108,34 @@ const Login = () => {
       }
       await handleRedirectLogic(userCred.user);
     } catch (err) {
-      setError(err.message);
+      // --- REFINADO: Manejo de errores contextual (Login vs. Registro) ---
+      if (isRegistering) {
+        // Errores comunes durante el registro
+        switch (err.code) {
+          case 'auth/email-already-in-use':
+            setError(`El correo "${email}" ya está registrado. Intenta iniciar sesión.`);
+            break;
+          case 'auth/weak-password':
+            setError("La contraseña es muy débil. Debe tener al menos 6 caracteres.");
+            break;
+          default:
+            setError(err.message);
+        }
+      } else {
+        // Errores comunes durante el inicio de sesión
+        switch (err.code) {
+          case 'auth/invalid-credential':
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+            setError("Credenciales inválidas. Revisa tu correo y contraseña, o crea una cuenta si aún no la tienes.");
+            break;
+          case 'auth/too-many-requests':
+            setError("El acceso a esta cuenta ha sido deshabilitado temporalmente debido a muchos intentos fallidos. Inténtalo más tarde o restablece tu contraseña.");
+            break;
+          default:
+            setError(err.message);
+        }
+      }
       setLoading(false);
     }
   };
