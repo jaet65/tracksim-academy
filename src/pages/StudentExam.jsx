@@ -24,7 +24,7 @@ import timeWarningSound from '../assets/sounds/time-warning.mp3'; // <-- NUEVO: 
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 // --- NUEVO: Constantes para los descansos ---
-const BREAK_INTERVAL_QUESTIONS = 6; // Descanso cada 60 preguntas
+const BREAK_INTERVAL_QUESTIONS = 60; // Descanso cada 60 preguntas
 const BREAK_INTERVAL_TIME_SECONDS = 30 * 60; // Descanso cada 30 minutos
 const BREAK_DURATION_SECONDS = 5 * 60; // Duración del descanso de 5 minutos
 
