@@ -27,8 +27,8 @@ const CompleteProfile = () => {
 
     // --- NUEVO: Capitalizar nombres y apellidos ---
     if (['firstName', 'paternalLastName', 'maternalLastName'].includes(name)) {
-      // Capitaliza la primera letra de cada palabra
-      processedValue = value.replace(/\b\w/g, char => char.toUpperCase());
+      // Capitaliza la primera letra de cada palabra, ignorando mayúsculas existentes y manejando acentos.
+      processedValue = value.replace(/(^|\s)\p{L}/gu, char => char.toUpperCase());
     }
 
     // --- NUEVO: Convertir a mayúsculas para CURP y RFC ---
