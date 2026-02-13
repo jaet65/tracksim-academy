@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
-import { signOut } from 'firebase/auth';import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query, updateDoc } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
+import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query, updateDoc } from 'firebase/firestore';
 import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
-import Papa from 'papaparse';import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download, Paperclip, Link2 } from 'lucide-react';
+import Papa from 'papaparse';
+import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download, Paperclip, Link2, FileX } from 'lucide-react';
 import { Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -18,12 +20,17 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
+// --- NUEVO: Configuración de Cloudinary (deberías mover esto a un archivo .env) ---
+const CLOUDINARY_CLOUD_NAME = "didj7kuah"; // <-- REEMPLAZA con tu Cloud Name de Cloudinary
+const CLOUDINARY_UPLOAD_PRESET = "Academy"; // <-- REEMPLAZA con tu Upload Preset
+const CLOUDINARY_FOLDER = "Guias"; // <-- REEMPLAZA con el nombre de tu carpeta
+
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [examTitle, setExamTitle] = useState(''); // Estado para el nombre del examen
   const [examDuration, setExamDuration] = useState(45); // <-- NUEVO: Estado para la duración
-  const [guideLink, setGuideLink] = useState(''); // <-- NUEVO: Para el hipervínculo de la guía
   const [exams, setExams] = useState([]);
+  const [guideFile, setGuideFile] = useState(null); // <-- NUEVO: Para el archivo de la guía
   const [loadingExams, setLoadingExams] = useState(true);
   const [chartData, setChartData] = useState(null);
   const [allResults, setAllResults] = useState([]);
@@ -32,6 +39,7 @@ const AdminDashboard = () => {
   const [selectedMonthFilter, setSelectedMonthFilter] = useState('all');
   const [loadingChart, setLoadingChart] = useState(true);
   const [editingExamId, setEditingExamId] = useState(null); // <-- NUEVO: Para edición en línea
+  const [isDeletingGuide, setIsDeletingGuide] = useState(null); // Para el loader de borrado de guía
   const chartRef = useRef(null);
   const navigate = useNavigate();
 
@@ -149,6 +157,31 @@ const AdminDashboard = () => {
     link.download = 'rendimiento_mensual.png';
     link.click();
   };
+
+  // --- NUEVO: Función para subir un archivo a Cloudinary ---
+  const uploadToCloudinary = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    formData.append('folder', CLOUDINARY_FOLDER);
+
+    try {
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al subir el archivo a Cloudinary.');
+      }
+
+      const data = await response.json();
+      return { secure_url: data.secure_url, delete_token: data.delete_token }; // Devuelve URL y token de borrado
+    } catch (error) {
+      console.error("Error en Cloudinary:", error);
+      throw error; // Propaga el error para que sea manejado por la función que llama
+    }
+  };
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -168,6 +201,17 @@ const AdminDashboard = () => {
       encoding: "ISO-8859-1",
       complete: async (results) => {
         try {
+          let guideData = { url: '', token: '' };
+          // --- NUEVO: Subir la guía a Cloudinary si existe ---
+          if (guideFile) {
+            try {
+              const { secure_url, delete_token } = await uploadToCloudinary(guideFile);
+              guideData = { url: secure_url, token: delete_token };
+            } catch (uploadError) {
+              alert("Hubo un error al subir la guía complementaria. El examen no fue creado.");
+              throw uploadError; // Detiene la ejecución
+            }
+          }
           const questions = results.data.map((row, index) => {
             let options;
             let questionType = 'MC'; // Multiple Choice por defecto
@@ -209,7 +253,8 @@ const AdminDashboard = () => {
             createdAt: new Date(),
             totalQuestions: questions.length,
             studyGuide: studyGuide, // <-- NUEVO: Guardamos la guía generada
-            supplementaryGuideUrl: guideLink.trim(), // <-- NUEVO: Guardamos el hipervínculo
+            supplementaryGuideUrl: guideData.url, // <-- MODIFICADO: Usamos la URL de Cloudinary
+            supplementaryGuideDeleteToken: guideData.token || "", // <-- CORRECCIÓN: Aseguramos que no sea undefined
             questions: questions
           };
 
@@ -220,7 +265,7 @@ const AdminDashboard = () => {
           // Limpiar formulario
           setExamTitle('');
           setExamDuration(45);
-          setGuideLink('');
+          setGuideFile(null);
           e.target.value = null;
           fetchExams(); // Recargar la lista de exámenes
 
@@ -238,12 +283,27 @@ const AdminDashboard = () => {
     });
   };
 
-  const handleDeleteExam = async (examId, examTitle) => {
+  const handleDeleteExam = async (exam) => {
+    const { id: examId, title: examTitle, supplementaryGuideDeleteToken } = exam;
     if (window.confirm(`¿Estás seguro de que quieres eliminar el examen "${examTitle}"? Esta acción no se puede deshacer.`)) {
       try {
+        // 1. (NUEVO) Eliminar la guía de Cloudinary si existe
+        if (supplementaryGuideDeleteToken) {
+          console.log("El examen tiene una guía adjunta. Intentando eliminar de Cloudinary...");
+          try {
+            const formData = new FormData();
+            formData.append('token', supplementaryGuideDeleteToken);
+            await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/delete_by_token`, {
+              method: 'POST',
+              body: formData,
+            });
+          } catch (deleteError) {
+            console.warn("No se pudo eliminar el archivo de Cloudinary, pero se continuará con la eliminación del examen:", deleteError);
+          }
+        }
+        // 2. Eliminar el examen de Firestore
         await deleteDoc(doc(db, "exams", examId));
         alert(`Examen "${examTitle}" eliminado con éxito.`);
-        // Actualizar la lista de exámenes en el estado para reflejar el cambio
         setExams(exams.filter(exam => exam.id !== examId));
       } catch (error) {
         console.error("Error eliminando examen: ", error);
@@ -271,21 +331,93 @@ const AdminDashboard = () => {
   };
 
   // --- NUEVO: Lógica para añadir/editar el hipervínculo de la guía ---
-  const handleUpdateGuideLink = async (examId, currentLink) => {
-    const newLink = window.prompt("Pega el nuevo hipervínculo de la guía de estudio (Google Drive, etc.).\nDéjalo en blanco para eliminar el enlace actual.", currentLink || "");
+  const handleUpdateGuideLink = (exam) => {
+    const { id: examId, supplementaryGuideDeleteToken: oldDeleteToken } = exam;
 
-    // Si el usuario cancela el prompt, newLink será null
-    if (newLink === null) return;
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'application/pdf,image/*'; // Acepta PDFs e imágenes
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+  
+      setLoading(true); // Podríamos usar un loader específico por fila en el futuro
+      try {
+        // 1. (Opcional pero recomendado) Eliminar la guía antigua de Cloudinary si existe
+        if (oldDeleteToken) {
+          console.log("Intentando eliminar la guía antigua de Cloudinary...");
+          try {
+            const formData = new FormData();
+            formData.append('token', oldDeleteToken);
+            await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/delete_by_token`, {
+              method: 'POST',
+              body: formData,
+            });
+          } catch (deleteError) {
+            console.warn("No se pudo eliminar el archivo antiguo de Cloudinary, pero se continuará con la actualización:", deleteError);
+          }
+        }
 
-    try {
-      const examRef = doc(db, "exams", examId);
-      await updateDoc(examRef, { supplementaryGuideUrl: newLink.trim() });
+        // 2. Subir el nuevo archivo
+        console.log("Subiendo nuevo archivo a Cloudinary...");
+        const { secure_url, delete_token: newDeleteToken } = await uploadToCloudinary(file);
+        console.log("Archivo subido con éxito. URL:", secure_url);
+        
+        // 3. Actualizar la base de datos con la nueva información
+        console.log("Actualizando la referencia en Firestore...");
+        const examRef = doc(db, "exams", examId);
+        await updateDoc(examRef, { 
+          supplementaryGuideUrl: secure_url, 
+          supplementaryGuideDeleteToken: newDeleteToken || "" // <-- CORRECCIÓN: Aseguramos que no sea undefined
+        });
+        
+        alert("Guía complementaria actualizada con éxito.");
+        fetchExams(); // CORRECCIÓN: Recargamos para obtener el nuevo delete_token
+      } catch (error) {
+        console.error("Error detallado durante la actualización de la guía:", error);
+        alert("Hubo un error al actualizar la guía.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fileInput.click();
+  };
 
-      alert("Hipervínculo de la guía actualizado con éxito.");
-      fetchExams(); // Recargamos la lista para mostrar/ocultar el ícono
-    } catch (error) {
-      console.error("Error actualizando el hipervínculo:", error);
-      alert("Hubo un error al actualizar el hipervínculo.");
+  const handleDeleteGuideLink = async (exam) => {
+    const { id: examId, supplementaryGuideDeleteToken } = exam;
+    if (window.confirm("¿Estás seguro de que quieres eliminar la guía complementaria de este examen?")) {
+      setIsDeletingGuide(examId);
+      try {
+        // 1. Eliminar de Cloudinary si hay un token
+        if (supplementaryGuideDeleteToken) {
+          console.log("Intentando eliminar archivo de Cloudinary con token:", supplementaryGuideDeleteToken);
+          const formData = new FormData();
+          formData.append('token', supplementaryGuideDeleteToken);
+          const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/delete_by_token`, {
+            method: 'POST',
+            body: formData,
+          });
+          const data = await response.json();
+          if (data.result !== 'ok') {
+            // Si falla, lo notificamos pero continuamos para limpiar la DB
+            console.warn("El archivo no se pudo eliminar de Cloudinary (puede que ya no exista), pero se quitará la referencia.", data);
+          }
+        }
+
+        // 2. Limpiar los campos en Firestore
+        const examRef = doc(db, "exams", examId);
+        await updateDoc(examRef, { 
+          supplementaryGuideUrl: "",
+          supplementaryGuideDeleteToken: ""
+        });
+        alert("Guía eliminada con éxito.");
+        fetchExams(); // Recargamos la lista para mostrar/ocultar el ícono
+      } catch (error) {
+        console.error("Error eliminando la guía:", error);
+        alert("Hubo un error al eliminar la guía.");
+      } finally {
+        setIsDeletingGuide(null);
+      }
     }
   };
 
@@ -399,19 +531,24 @@ const AdminDashboard = () => {
 
           {/* NUEVO: Input para el hipervínculo de la guía */}
           <div className="max-w-md mx-auto mb-8 text-left">
-            <label className="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">
-              Hipervínculo a Guía Complementaria (Opcional)
+            <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
+              Guía Complementaria (PDF, Opcional)
             </label>
             <div className="relative">
-              <Link2 className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
+              <Paperclip className="absolute top-2 left-1 text-gray-400 w-3" />
               <input
-                type="url"
-                placeholder="Pega aquí el enlace de Google Drive, etc."
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                value={guideLink}
-                onChange={(e) => setGuideLink(e.target.value)}
+                type="file"
+                accept="application/pdf,image/*"
+                onChange={(e) => setGuideFile(e.target.files[0])}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               />
             </div>
+            {guideFile && (
+              <div className="mt-2 text-xs text-gray-500 flex justify-between items-center">
+                <span>Seleccionado: <span className="font-medium text-gray-700">{guideFile.name}</span></span>
+                <button onClick={() => setGuideFile(null)} className="text-red-500 hover:underline">Quitar</button>
+              </div>
+            )}
           </div>
 
           {/* Área de carga de archivo */}
@@ -493,13 +630,22 @@ const AdminDashboard = () => {
                         <>
                           <span className="text-sm font-medium text-gray-600 bg-gray-200 px-2 py-1 rounded-md">{exam.duration || 'N/A'} min</span>
                           <button onClick={() => setEditingExamId(exam.id)} className="text-blue-600 p-2 rounded-full hover:bg-blue-100">Editar</button>
-                          <button 
-                            onClick={() => handleUpdateGuideLink(exam.id, exam.supplementaryGuideUrl)}
-                            className="text-teal-500 hover:text-teal-700 p-2 rounded-full hover:bg-teal-100 transition-colors"
-                            title="Añadir/Editar hipervínculo de guía"
-                          ><Link2 size={20} /></button>
                           <button
-                            onClick={() => handleDeleteExam(exam.id, exam.title)}
+                            onClick={() => handleUpdateGuideLink(exam)}
+                            className="text-teal-500 hover:text-teal-700 p-2 rounded-full hover:bg-teal-100 transition-colors"
+                            title="Subir o reemplazar guía complementaria"
+                          ><Upload size={20} /></button>
+                          {exam.supplementaryGuideUrl && (
+                            <button onClick={() => handleDeleteGuideLink(exam)} disabled={isDeletingGuide === exam.id} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-wait" title="Eliminar guía complementaria">
+                              {isDeletingGuide === exam.id ? (
+                                <Loader size={20} className="animate-spin" />
+                              ) : (
+                                <FileX size={20} />
+                              )}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteExam(exam)}
                             className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors"
                             title="Eliminar examen"
                           ><Trash2 size={20} /></button>

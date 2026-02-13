@@ -110,7 +110,7 @@ const StudyGuideModal = ({ guide, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <header className="p-4 border-b flex justify-between items-center sticky top-0 bg-white rounded-t-xl">
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FileText size={20} /> Guía de Estudio Detallada</h2>
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FileText size={20} /> Programa sintetico</h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200"><X size={20} /></button>
         </header>
         <main className="p-8 overflow-y-auto">
@@ -145,7 +145,7 @@ const StudyGuideModal = ({ guide, onClose }) => {
             )}
             <button onClick={handleDownload} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm font-medium">
               <Download size={16} />
-              Descargar Guía Automática (PDF)
+              Ver Síntesis (PDF)
             </button>
           </div>
         </footer>
