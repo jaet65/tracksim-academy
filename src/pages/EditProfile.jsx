@@ -18,6 +18,7 @@ const EditProfile = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({}); // <-- NUEVO: Para errores de campo
   const navigate = useNavigate();
   const { userId } = useParams(); // <-- NUEVO: Obtener el ID del usuario de la URL si existe
 
@@ -66,11 +67,42 @@ const EditProfile = () => {
       // Capitaliza la primera letra de cada palabra
       processedValue = value.replace(/\b\w/g, char => char.toUpperCase());
     }
+
+    // --- NUEVO: Convertir a mayúsculas para CURP y RFC ---
+    if (['curp', 'companyRfc'].includes(name)) {
+      processedValue = value.toUpperCase();
+    }
+
     setFormData(prev => ({ ...prev, [name]: processedValue }));
+
+    // --- NUEVO: Validación en tiempo real ---
+    if (name === 'curp') {
+      const curpRegex = /^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[A-Z0-9]{2}$/;
+      if (processedValue && !curpRegex.test(processedValue)) {
+        setFieldErrors(prev => ({ ...prev, curp: 'El formato del CURP no es válido (18 caracteres).' }));
+      } else {
+        setFieldErrors(prev => ({ ...prev, curp: '' }));
+      }
+    }
+
+    if (name === 'companyRfc') {
+      const rfcRegex = /^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/;
+      if (processedValue && !rfcRegex.test(processedValue)) {
+        setFieldErrors(prev => ({ ...prev, companyRfc: 'El formato del RFC no es válido (12 o 13 caracteres).' }));
+      } else {
+        setFieldErrors(prev => ({ ...prev, companyRfc: '' }));
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // --- NUEVO: Validación final antes de enviar ---
+    if (fieldErrors.curp || fieldErrors.companyRfc) {
+      setError("Por favor, corrige los errores en el formulario.");
+      return;
+    }
 
     setSaving(true);
     setError('');
@@ -175,22 +207,28 @@ const EditProfile = () => {
             <User className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
             <input type="text" name="maternalLastName" placeholder="Apellido Materno" value={formData.maternalLastName} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
+
           <div className="relative">
             <Fingerprint className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
-            <input type="text" name="curp" placeholder="CURP" value={formData.curp} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            <input type="text" name="curp" placeholder="CURP" value={formData.curp} onChange={handleChange} required maxLength="18" className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 outline-none ${fieldErrors.curp ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`} />
           </div>
+          {fieldErrors.curp && <p className="text-red-500 text-xs -mt-3 ml-2">{fieldErrors.curp}</p>}
+
           <div className="relative">
             <Briefcase className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
             <input type="text" name="occupation" placeholder="Ocupación" value={formData.occupation} onChange={handleChange} required disabled className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-100 cursor-not-allowed" />
           </div>
+
           <div className="relative">
             <Building className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
             <input type="text" name="company" placeholder="Empresa" value={formData.company} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
+
           <div className="relative">
             <Hash className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
-            <input type="text" name="companyRfc" placeholder="RFC de la Empresa" value={formData.companyRfc} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            <input type="text" name="companyRfc" placeholder="RFC de la Empresa" value={formData.companyRfc} onChange={handleChange} required maxLength="13" className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 outline-none ${fieldErrors.companyRfc ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`} />
           </div>
+          {fieldErrors.companyRfc && <p className="text-red-500 text-xs -mt-3 ml-2">{fieldErrors.companyRfc}</p>}
 
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
           {success && <p className="text-green-500 text-sm text-center">{success}</p>}
