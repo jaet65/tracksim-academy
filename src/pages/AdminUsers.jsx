@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
-import { collection, getDocs, doc, deleteDoc, orderBy, query, where, addDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, orderBy, query, where, addDoc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { LogOut, ArrowLeft, Search, Trash2, Users, List, Repeat, Loader, X } from 'lucide-react';
+import { LogOut, ArrowLeft, Search, Trash2, Users, List, Repeat, Loader, X, GraduationCap } from 'lucide-react';
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -54,6 +54,24 @@ const AdminUsers = () => {
     }
   };
 
+  const handleToggleInstructor = async (user) => {
+    const { id, fullName, isInstructor } = user;
+    const action = isInstructor ? "degradar" : "promover";
+    const role = isInstructor ? "Alumno" : "Instructor";
+
+    if (window.confirm(`¿Estás seguro de que quieres ${action} a ${fullName} al rol de ${role}?`)) {
+      try {
+        const userRef = doc(db, "users", id);
+        await updateDoc(userRef, { isInstructor: !isInstructor });
+        setUsers(prev => prev.map(u => u.id === id ? { ...u, isInstructor: !isInstructor } : u));
+        alert(`Usuario actualizado a ${role} con éxito.`);
+      } catch (error) {
+        console.error(`Error al ${action}:`, error);
+        alert(`No se pudo ${action} al usuario.`);
+      }
+    }
+  };
+
   const filteredUsers = users.filter(u =>
     u.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -74,17 +92,20 @@ const AdminUsers = () => {
       {/* Navbar */}
       <nav className="bg-white shadow-sm p-4 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <Users className="text-purple-600" /> Gestión de Usuarios
+          </h1>
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/admin')} className="text-gray-500 hover:text-blue-600">
-              <ArrowLeft size={24} />
+            <button onClick={() => navigate('/admin')} className="flex items-center gap-2 text-gray-600 hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors font-medium">
+              <ArrowLeft size={20} /> Panel Principal
             </button>
-            <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <Users className="text-purple-600" /> Gestión de Usuarios
-            </h1>
+            <button onClick={() => navigate('/admin/resultados')} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg transition-colors font-medium">
+              <List size={20} /> Ver Resultados
+            </button>
+            <button onClick={handleLogout} className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors bg-gray-100 px-4 py-2 rounded-lg">
+              <LogOut size={18} /> Salir
+            </button>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 hover:text-red-700 font-medium">
-            <LogOut size={18} /> Salir
-          </button>
         </div>
       </nav>
 
@@ -112,6 +133,7 @@ const AdminUsers = () => {
                   <th className="p-4 font-bold text-gray-600 text-sm">Nombre</th>
                   <th className="p-4 font-bold text-gray-600 text-sm">Email</th>
                   <th className="p-4 font-bold text-gray-600 text-sm">Empresa</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Rol</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Acciones</th>
                 </tr>
               </thead>
@@ -123,17 +145,31 @@ const AdminUsers = () => {
                 ) : (
                   filteredUsers.map((user) => (
                     <tr key={user.id} className="hover:bg-purple-50 transition-colors">
-                      <td className="p-4">
+                      <td className="p-4 align-top">
                         <div className="font-bold text-gray-800">{user.fullName}</div>
                         <div className="text-xs text-gray-500">{user.curp}</div>
                       </td>
-                      <td className="p-4 text-sm text-gray-600">{user.email}</td>
-                      <td className="p-4 text-sm text-gray-600">{user.company}</td>
-                      <td className="p-4 text-right">
-                        {!user.isAdmin && (
+                      <td className="p-4 text-sm text-gray-600 align-top">{user.email}</td>
+                      <td className="p-4 text-sm text-gray-600 align-top">{user.company}</td>
+                      <td className="p-4 text-center align-top">
+                        {user.isAdmin ? (
+                          <span className="px-2 py-1 text-xs font-bold bg-blue-100 text-blue-700 rounded-full">Admin</span>
+                        ) : user.isInstructor ? (
+                          <span className="px-2 py-1 text-xs font-bold bg-green-100 text-green-700 rounded-full">Instructor</span>
+                        ) : (
+                          <span className="px-2 py-1 text-xs font-bold bg-gray-100 text-gray-600 rounded-full">Alumno</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-right align-top">
+                        {user.isAdmin ? (
+                          <span className="text-xs text-gray-400 italic">N/A</span>
+                        ) : (
                           <>
                             <button onClick={() => navigate(`/admin/resultados?search=${encodeURIComponent(user.fullName)}`)} className="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-100 transition" title={`Ver resultados de ${user.fullName}`}>
                               <List size={18} />
+                            </button>
+                            <button onClick={() => handleToggleInstructor(user)} className={`${user.isInstructor ? 'text-yellow-600' : 'text-green-500'} p-2 rounded-full hover:bg-green-100 transition`} title={user.isInstructor ? `Degradar a Alumno` : `Promover a Instructor`}>
+                              <GraduationCap size={18} />
                             </button>
                             <button onClick={() => handleOpenRetakeModal(user)} className="text-orange-500 hover:text-orange-700 p-2 rounded-full hover:bg-orange-100 transition" title={`Aprobar nuevo intento para ${user.fullName}`}>
                               <Repeat size={18} />

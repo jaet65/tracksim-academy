@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';
-import { collection, addDoc, getDocs, doc, deleteDoc, orderBy, query, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, deleteDoc, orderBy, query, updateDoc } from 'firebase/firestore';
 import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
 import Papa from 'papaparse';
 import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download, Paperclip, Link2, FileX } from 'lucide-react';
@@ -38,6 +38,7 @@ const AdminDashboard = () => {
   const [selectedExamFilter, setSelectedExamFilter] = useState('all');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState('all');
   const [loadingChart, setLoadingChart] = useState(true);
+  const [isInstructor, setIsInstructor] = useState(false); // <-- NUEVO: Para identificar el rol
   const [editingExamId, setEditingExamId] = useState(null); // <-- NUEVO: Para edición en línea
   const [isDeletingGuide, setIsDeletingGuide] = useState(null); // Para el loader de borrado de guía
   const chartRef = useRef(null);
@@ -78,6 +79,14 @@ const AdminDashboard = () => {
       setLoadingExams(true);
       setLoadingChart(true);
       try {
+        // --- NUEVO: Identificar si el usuario es instructor ---
+        const user = auth.currentUser;
+        if (user) {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists() && userDoc.data().isInstructor) {
+            setIsInstructor(true);
+          }
+        }
         // Fetch exams
         await fetchExams();
 
@@ -464,13 +473,15 @@ const AdminDashboard = () => {
             >
               <List size={20} /> Ver Resultados
             </button>
-            {/* Botón para ir a Usuarios */}
-            <button 
-              onClick={() => navigate('/admin/usuarios')}
-              className="flex items-center gap-2 text-purple-600 hover:bg-purple-50 px-4 py-2 rounded-lg transition-colors font-medium"
-            >
-              <Users size={20} /> Gestionar Usuarios
-            </button>
+            {/* --- NUEVO: Ocultar botón para instructores --- */}
+            {!isInstructor && (
+              <button 
+                onClick={() => navigate('/admin/usuarios')}
+                className="flex items-center gap-2 text-purple-600 hover:bg-purple-50 px-4 py-2 rounded-lg transition-colors font-medium"
+              >
+                <Users size={20} /> Gestionar Usuarios
+              </button>
+            )}
 
             <button 
               onClick={handleLogout}
@@ -724,21 +735,23 @@ const AdminDashboard = () => {
           )}
         </div>
 
-        {/* Zona de Mantenimiento */}
-        <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-red-500">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
-            <AlertTriangle className="text-red-500" /> Acciones de Mantenimiento
-          </h2>
-          <div className="flex flex-col sm:flex-row justify-between items-center p-4 bg-red-50 rounded-lg border border-red-200">
-            <div>
-              <p className="font-bold text-red-800">Reiniciar Reintentos Globales</p>
-              <p className="text-sm text-red-600">Esta acción eliminará todos los pases de reintento aprobados que aún no han sido utilizados por los alumnos.</p>
+        {/* --- NUEVO: Ocultar zona de mantenimiento para instructores --- */}
+        {!isInstructor && (
+          <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-red-500">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+              <AlertTriangle className="text-red-500" /> Acciones de Mantenimiento
+            </h2>
+            <div className="flex flex-col sm:flex-row justify-between items-center p-4 bg-red-50 rounded-lg border border-red-200">
+              <div>
+                <p className="font-bold text-red-800">Reiniciar Reintentos Globales</p>
+                <p className="text-sm text-red-600">Esta acción eliminará todos los pases de reintento aprobados que aún no han sido utilizados por los alumnos.</p>
+              </div>
+              <button onClick={handleResetAllRetakes} disabled={loading} className="mt-4 sm:mt-0 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition shadow-sm font-medium disabled:bg-red-300">
+                {loading ? 'Procesando...' : 'Reiniciar Todo'}
+              </button>
             </div>
-            <button onClick={handleResetAllRetakes} disabled={loading} className="mt-4 sm:mt-0 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition shadow-sm font-medium disabled:bg-red-300">
-              {loading ? 'Procesando...' : 'Reiniciar Todo'}
-            </button>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );

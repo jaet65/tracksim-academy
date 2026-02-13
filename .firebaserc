@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "tracksim-academy"
-  }
+    "default": "tracksim-academy",
+    "staging": "tracksim-academy"
+  },
+  "targets": {},
+  "etags": {}
 }

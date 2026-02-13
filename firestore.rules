@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =================================
+    // Funciones Auxiliares
+    // =================================
+
+    // Devuelve los datos del perfil del usuario que hace la petición.
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Verifica si el usuario es Administrador.
+    function isAdmin() {
+      return request.auth != null && getUserData().isAdmin == true;
+    }
+
+    // Verifica si el usuario es Instructor.
+    function isInstructor() {
+      return request.auth != null && getUserData().isInstructor == true;
+    }
+
+    // =================================
+    // Colección: users
+    // =================================
+    match /users/{userId} {
+      // Un usuario puede leer y actualizar su propio perfil.
+      allow read, update: if request.auth.uid == userId;
+      
+      // Un usuario puede crear su propio perfil (al registrarse).
+      allow create: if request.auth.uid == userId;
+
+      // Un administrador puede leer, actualizar o eliminar CUALQUIER perfil.
+      allow read, update, delete: if isAdmin();
+    }
+
+    // =================================
+    // Colección: exams
+    // =================================
+    match /exams/{examId} {
+      // Cualquier usuario autenticado puede leer la lista de exámenes.
+      allow read: if request.auth != null;
+      
+      // Solo los administradores pueden crear, actualizar o eliminar exámenes.
+      allow write: if isAdmin(); // 'write' incluye create, update, delete.
+    }
+
+    // =================================
+    // Colección: results
+    // =================================
+		match /results/{resultId} {
+      // Un alumno puede crear su propio resultado.
+      allow create: if request.auth.uid == request.resource.data.studentUid;
+
+      // Un alumno puede leer sus propios resultados.
+      allow read: if request.auth.uid == resource.data.studentUid;
+      
+      // Un administrador puede leer o eliminar cualquier resultado.
+      allow read, delete: if isAdmin();
+
+      // Un instructor puede leer o eliminar resultados de su propia empresa.
+      allow read, delete: if isInstructor() && getUserData().company == resource.data.studentCompany;
+
+      // IMPORTANTE: Se prohíbe explícitamente la actualización de resultados para evitar trampas.
+      allow update: if false;
+    }
+
+    // =================================
+    // Colección: retake_approvals
+    // =================================
+    match /retake_approvals/{approvalId} {
+      // Los administradores pueden leer, crear y eliminar cualquier pase de reintento.
+      allow read, create, delete: if isAdmin();
+      
+      // Un alumno necesita poder leer si tiene un pase pendiente.
+      allow read: if request.auth != null;
+
+      // Un alumno necesita poder ELIMINAR su propio pase para "consumirlo" antes de empezar el examen.
+      allow delete: if request.auth.uid == resource.data.studentUid;
+    }
+  }
+}

@@ -59,6 +59,13 @@ const Login = () => {
         return;
       }
 
+      // B. Instructor
+      if (userDoc.exists() && userDoc.data().isInstructor) {
+        // Los instructores van a la misma página de resultados, pero la página filtrará los datos.
+        navigate('/admin/resultados');
+        return;
+      }
+
       // B. Alumno
       if (userDoc.exists()) {
         navigate('/portal');

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { db, auth } from '../firebase-config';
-import { collection, getDocs, orderBy, query, doc, deleteDoc, addDoc, writeBatch, where } from 'firebase/firestore';
+import { db, auth } from '../firebase-config'; // Importamos auth para obtener el usuario actual
+import { collection, getDocs, orderBy, query, doc, getDoc, deleteDoc, addDoc, writeBatch, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat, Upload, Loader } from 'lucide-react';
+import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat, Upload, Loader, Users } from 'lucide-react';
 import { formatTime } from '../utils/timeUtils'; // Import utility formatTime
 import { generateDC3 } from '../utils/generateDC3'; // Para el formato oficial
 import { generateConstancia } from '../utils/generateConstancia'; // Para la constancia con errores
 import Papa from 'papaparse';
+import logo from '../assets/Logo.gif';
 
 const AdminResults = () => {
   const [results, setResults] = useState([]);
@@ -19,6 +20,8 @@ const AdminResults = () => {
   const [currentPage, setCurrentPage] = useState(1); // <-- NUEVO: Para paginación
   const [showExportModal, setShowExportModal] = useState(false); // <-- NUEVO: Para el modal de exportación
   const [resultsPerPage] = useState(20); // <-- NUEVO: Resultados por página
+  const [currentUserRole, setCurrentUserRole] = useState({ isInstructor: false, company: null }); // <-- NUEVO: Para el rol
+
   const navigate = useNavigate();
   const location = useLocation(); // <-- NUEVO: Para leer la URL
 
@@ -33,19 +36,37 @@ const AdminResults = () => {
 
   // 1. Cargar resultados desde Firebase
   const fetchAllData = async () => {
-    const fetchAllData = async () => {
-      try {
-        // Cargar resultados
-        const resultsRef = collection(db, "results");
-        const q = query(resultsRef, orderBy("timestamp", "desc")); 
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          dateObj: doc.data().timestamp?.toDate() 
-        }));
-        setResults(data);
+    setLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        navigate('/login');
+        return;
+      }
 
+      // Identificar el rol y la empresa del usuario actual
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+      let instructorCompany = null;
+      if (userDoc.exists() && userDoc.data().isInstructor) {
+        instructorCompany = userDoc.data().company;
+        setCurrentUserRole({ isInstructor: true, company: instructorCompany });
+      }
+
+      // Cargar resultados con filtro de empresa si es instructor
+      let q;
+      if (instructorCompany) {
+        // Si es instructor, solo trae resultados de su empresa
+        q = query(collection(db, "results"), where("studentCompany", "==", instructorCompany), orderBy("timestamp", "desc"));
+      } else {
+        // Si es admin, trae todos
+        const resultsRef = collection(db, "results");
+        q = query(resultsRef, orderBy("timestamp", "desc"));
+      }
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), dateObj: doc.data().timestamp?.toDate() }));
+      setResults(data);
+      
         // Cargar aprobaciones de reintento PENDIENTES
         const approvalsRef = collection(db, "retake_approvals");
         const approvalsSnapshot = await getDocs(approvalsRef);
@@ -54,21 +75,18 @@ const AdminResults = () => {
           return `${approvalData.studentUid}_${approvalData.examId}`;
         });
         setPendingApprovals(pending);
-
-      } catch (error) {
-        console.error("Error cargando datos:", error);
-        if (error.code === 'failed-precondition') {
-          alert("Nota: Firebase requiere un índice para ordenar por fecha. Revisa la consola.");
-        } else if (error.code === 'permission-denied') {
-          alert("Error de permisos. Asegúrate de que las reglas de seguridad de Firebase permitan a los administradores leer las colecciones 'results' y 'retake_approvals'.");
-        }
-      } finally {
-        setLoading(false);
+    } catch (error) {
+      console.error("Error cargando datos:", error);
+      if (error.code === 'failed-precondition') {
+        alert("Nota: Firebase requiere un índice para ordenar por fecha. Revisa la consola.");
+      } else if (error.code === 'permission-denied') {
+        alert("Error de permisos. Asegúrate de que las reglas de seguridad de Firebase permitan a los administradores leer las colecciones 'results' y 'retake_approvals'.");
       }
-    };
-
-    fetchAllData();
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   useEffect(() => {
     fetchAllData();
@@ -358,17 +376,33 @@ const AdminResults = () => {
       {/* Navbar Admin */}
       <nav className="bg-white shadow-sm p-4 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/admin')} className="text-gray-500 hover:text-blue-600">
-              <ArrowLeft size={24} />
-            </button>
-            <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <FileText className="text-blue-600" /> Resultados y DC-3
-            </h1>
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="Logo" className="h-15" />
+            <h1 className="text-xl font-bold text-gray-800">Resultados y DC-3</h1>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 hover:text-red-700 font-medium">
-            <LogOut size={18} /> Salir
-          </button>
+          <div className="flex items-center gap-4">
+            {currentUserRole.isInstructor && (
+              <span className="text-sm font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                Vista de Instructor: {currentUserRole.company}
+              </span>
+            )}
+            {!currentUserRole.isInstructor && (
+              <button onClick={() => navigate('/admin')} className="flex items-center gap-2 text-gray-600 hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors font-medium">
+                <ArrowLeft size={20} /> Panel Principal
+              </button>
+            )}
+            {!currentUserRole.isInstructor && (
+              <button onClick={() => navigate('/admin/usuarios')} className="flex items-center gap-2 text-purple-600 hover:bg-purple-50 px-4 py-2 rounded-lg transition-colors font-medium">
+                <Users size={20} /> Gestionar Usuarios
+              </button>
+            )}
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors bg-gray-100 px-4 py-2 rounded-lg"
+            >
+              <LogOut size={18} /> Salir
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -387,8 +421,8 @@ const AdminResults = () => {
             />
           </div>
           
-          {/* --- NUEVO: Botones de acciones en lote --- */}
-          {selectedResults.length > 0 && (
+          {/* --- NUEVO: Botones de acciones en lote (solo para admins) --- */}
+          {!currentUserRole.isInstructor && selectedResults.length > 0 && (
             <div className="flex flex-col md:flex-row gap-2">
               <button
                 onClick={handleDeleteSelected}
@@ -428,14 +462,16 @@ const AdminResults = () => {
             <table className="w-full text-left">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="p-4 w-12">
-                    <input // La casilla "seleccionar todo" ahora solo afecta a la página actual
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      onChange={handleSelectAll}
-                      checked={filteredResults.length > 0 && selectedResults.length === filteredResults.length}
-                    />
-                  </th>
+                  {!currentUserRole.isInstructor && (
+                    <th className="p-4 w-12">
+                      <input // La casilla "seleccionar todo" ahora solo afecta a la página actual
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        onChange={handleSelectAll}
+                        checked={filteredResults.length > 0 && selectedResults.length === filteredResults.length}
+                      />
+                    </th>
+                  )}
                   <th className="p-4 font-bold text-gray-600 text-sm">Alumno</th>
                   <th className="p-4 font-bold text-gray-600 text-sm">CURP / Empresa</th>
                   <th className="p-4 font-bold text-gray-600 text-sm">Nombre Examen</th>
@@ -449,24 +485,26 @@ const AdminResults = () => {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="9" className="p-8 text-center text-gray-500">Cargando resultados...</td>
+                    <td colSpan={currentUserRole.isInstructor ? "8" : "9"} className="p-8 text-center text-gray-500">Cargando resultados...</td>
                   </tr>
                 ) : filteredResults.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
+                    <td colSpan={currentUserRole.isInstructor ? "8" : "9"} className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
                   </tr>
                 ) : (
                   currentResults.map((r) => (
                     <tr key={r.id} className="hover:bg-blue-50 transition-colors group">
-                      <td className="p-4">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          value={r.id}
-                          checked={selectedResults.includes(r.id)}
-                          onChange={(e) => handleSelectOne(e, r.id)}
-                        />
-                      </td>
+                      {!currentUserRole.isInstructor && (
+                        <td className="p-4">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            value={r.id}
+                            checked={selectedResults.includes(r.id)}
+                            onChange={(e) => handleSelectOne(e, r.id)}
+                          />
+                        </td>
+                      )}
                       <td className="p-4 flex items-center gap-2">
                         <div>
                           <div className="font-bold text-gray-800">{r.studentName}</div>
@@ -567,26 +605,30 @@ const AdminResults = () => {
                             </button>
                           )}
                           
-                          {pendingApprovals.includes(`${r.studentUid}_${r.examId}`) ? (
-                            <span className="text-xs font-semibold text-gray-500 bg-gray-200 px-2 py-1 rounded-md" title="Este alumno ya tiene un reintento pendiente para este examen.">
-                              Pendiente
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => handleApproveRetake(r)}
-                              className="text-orange-500 hover:text-orange-700 p-2 rounded-full hover:bg-orange-100 transition"
-                              title="Aprobar un nuevo intento para este alumno"
-                            >
-                              <Repeat size={18} />
-                            </button>
+                          {!currentUserRole.isInstructor && (
+                            <>
+                              {pendingApprovals.includes(`${r.studentUid}_${r.examId}`) ? (
+                                <span className="text-xs font-semibold text-gray-500 bg-gray-200 px-2 py-1 rounded-md" title="Este alumno ya tiene un reintento pendiente para este examen.">
+                                  Pendiente
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleApproveRetake(r)}
+                                  className="text-orange-500 hover:text-orange-700 p-2 rounded-full hover:bg-orange-100 transition"
+                                  title="Aprobar un nuevo intento para este alumno"
+                                >
+                                  <Repeat size={18} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteResult(r.id, r.studentName)}
+                                className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition"
+                                title="Eliminar esta calificación"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </>
                           )}
-                          <button
-                            onClick={() => handleDeleteResult(r.id, r.studentName)}
-                            className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition"
-                            title="Eliminar esta calificación"
-                          >
-                            <Trash2 size={18} />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -621,40 +663,42 @@ const AdminResults = () => {
           )}
         </div>
 
-        {/* Carga de Notas de Simulador */}
-        <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-purple-500">
-          <div className="flex items-center gap-3 mb-2">
-            <Upload className="text-purple-600 w-8 h-8" />
-            <h2 className="text-2xl font-bold text-gray-800">Cargar Notas de Simulador</h2>
-          </div>
-          <p className="text-gray-500 mb-8 max-w-2xl">
-            Sube un archivo <span className="font-mono text-purple-700">.csv</span> con las notas del simulador. El sistema buscará el resultado más reciente del alumno por su <strong className="text-gray-600">CURP</strong> y el <strong className="text-gray-600">título exacto del examen</strong> para actualizar la nota.
-          </p>
+        {/* Carga de Notas de Simulador (solo para admins) */}
+        {!currentUserRole.isInstructor && (
+          <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-purple-500">
+            <div className="flex items-center gap-3 mb-2">
+              <Upload className="text-purple-600 w-8 h-8" />
+              <h2 className="text-2xl font-bold text-gray-800">Cargar Notas de Simulador</h2>
+            </div>
+            <p className="text-gray-500 mb-8 max-w-2xl">
+              Sube un archivo <span className="font-mono text-purple-700">.csv</span> con las notas del simulador. El sistema buscará el resultado más reciente del alumno por su <strong className="text-gray-600">CURP</strong> y el <strong className="text-gray-600">título exacto del examen</strong> para actualizar la nota.
+            </p>
 
-          <label className={`
-            block w-full max-w-md mx-auto border-2 border-dashed rounded-lg p-8 cursor-pointer transition-all
-            ${uploading ? 'bg-gray-100 border-gray-300' : 'border-purple-300 hover:bg-purple-50 hover:border-purple-500'}
-          `}>
-            <input 
-              type="file" 
-              accept=".csv" 
-              onChange={handleSimulatorScoresUpload} 
-              disabled={uploading}
-              className="hidden" 
-            />
-            {uploading ? (
-              <div className="flex flex-col items-center gap-2 text-gray-500 font-bold animate-pulse">
-                <Loader className="animate-spin" /> Procesando archivo...
-              </div>
-            ) : (
-              <div className="flex flex-col items-center text-purple-600">
-                <FileText className="mb-2 w-8 h-8" />
-                <span className="font-medium">Haz clic para seleccionar el archivo CSV</span>
-              </div>
-            )}
-          </label>
-          <div className="mt-4 text-center text-xs text-gray-400">Columnas requeridas: <span className="font-mono bg-gray-100 px-1 rounded">CURP</span>, <span className="font-mono bg-gray-100 px-1 rounded">Examen</span>, <span className="font-mono bg-gray-100 px-1 rounded">Nota Simulador</span></div>
-        </div>
+            <label className={`
+              block w-full max-w-md mx-auto border-2 border-dashed rounded-lg p-8 cursor-pointer transition-all
+              ${uploading ? 'bg-gray-100 border-gray-300' : 'border-purple-300 hover:bg-purple-50 hover:border-purple-500'}
+            `}>
+              <input 
+                type="file" 
+                accept=".csv" 
+                onChange={handleSimulatorScoresUpload} 
+                disabled={uploading}
+                className="hidden" 
+              />
+              {uploading ? (
+                <div className="flex flex-col items-center gap-2 text-gray-500 font-bold animate-pulse">
+                  <Loader className="animate-spin" /> Procesando archivo...
+                </div>
+              ) : (
+                <div className="flex flex-col items-center text-purple-600">
+                  <FileText className="mb-2 w-8 h-8" />
+                  <span className="font-medium">Haz clic para seleccionar el archivo CSV</span>
+                </div>
+              )}
+            </label>
+            <div className="mt-4 text-center text-xs text-gray-400">Columnas requeridas: <span className="font-mono bg-gray-100 px-1 rounded">CURP</span>, <span className="font-mono bg-gray-100 px-1 rounded">Examen</span>, <span className="font-mono bg-gray-100 px-1 rounded">Nota Simulador</span></div>
+          </div>
+        )}
 
         {/* --- NUEVO: Modal para elegir tipo de exportación --- */}
         {showExportModal && (
