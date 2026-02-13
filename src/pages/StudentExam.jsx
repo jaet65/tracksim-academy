@@ -19,11 +19,12 @@ import ExamRules from '../components/ExamRules';
 import StudyGuideModal from '../components/StudyGuideModal'; // <-- NUEVO
 import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
 import BreakScreen from '../components/BreakScreen'; // <-- NUEVO: Pantalla de descanso
+import breakVideo from '../assets/videos/Break_Male.mp4'; // <-- NUEVO: Video para descanso
 import timeWarningSound from '../assets/sounds/time-warning.mp3'; // <-- NUEVO: Sonido de advertencia
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 // --- NUEVO: Constantes para los descansos ---
-const BREAK_INTERVAL_QUESTIONS = 60; // Descanso cada 60 preguntas
+const BREAK_INTERVAL_QUESTIONS = 6; // Descanso cada 60 preguntas
 const BREAK_INTERVAL_TIME_SECONDS = 30 * 60; // Descanso cada 30 minutos
 const BREAK_DURATION_SECONDS = 5 * 60; // Duración del descanso de 5 minutos
 
@@ -520,6 +521,8 @@ const StudentExam = () => {
         timeLeft={breakTimeLeft} // <-- Pasamos el tiempo restante
         durationInSeconds={BREAK_DURATION_SECONDS}
         onBreakFinish={handleBreakFinish} // onBreakFinish ya no se usa en BreakScreen, pero lo dejamos por si acaso
+        isFirstBreak={breaksTaken.questions + breaksTaken.time === 1}
+        videoSrc={breakVideo}
       />
     );
   }
