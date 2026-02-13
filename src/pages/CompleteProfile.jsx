@@ -22,7 +22,15 @@ const CompleteProfile = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    let processedValue = value;
+
+    // --- NUEVO: Capitalizar nombres y apellidos ---
+    if (['firstName', 'paternalLastName', 'maternalLastName'].includes(name)) {
+      // Capitaliza la primera letra de cada palabra
+      processedValue = value.replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    setFormData(prev => ({ ...prev, [name]: processedValue }));
   };
 
   const handleSubmit = async (e) => {
