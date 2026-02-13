@@ -114,7 +114,7 @@ const AdminResults = () => {
 
   // 3. Exportar a CSV (Excel simple)
   const exportToCSV = (filterType) => {
-    const headers = ["Nombre,CURP,Empresa,RFC,Examen,Calificacion,Nota Simulador,Tiempo Ocupado,Fecha"];
+    const headers = ["Nombre,CURP,Empresa,RFC,Examen,Calificacion,Nota Simulador,Promedio Final,Tiempo Ocupado,Fecha"];
 
     // Primero, filtramos los resultados según el criterio de búsqueda actual
     let resultsToProcess = filteredResults;
@@ -135,9 +135,14 @@ const AdminResults = () => {
       }
     });
 
-    const rows = latestResults.map(r =>
-      `"${r.studentName}","${r.studentCurp}","${r.studentCompany}","${r.studentCompanyRfc || ''}","${r.examTitle}","${r.score}","${r.simulatorScore !== undefined ? r.simulatorScore : 'TBD'}","${r.timeTaken !== undefined ? formatTime(r.timeTaken) : 'N/A'}","${r.dateObj?.toLocaleDateString()}"`
-    );
+    const rows = latestResults.map(r => {
+      let average = 'N/A';
+      if (r.score !== undefined && r.simulatorScore !== undefined) {
+        average = ((r.score + Number(r.simulatorScore)) / 2).toFixed(1);
+      }
+
+      return `"${r.studentName}","${r.studentCurp}","${r.studentCompany}","${r.studentCompanyRfc || ''}","${r.examTitle}","${r.score}","${r.simulatorScore !== undefined ? r.simulatorScore : 'TBD'}","${average}","${r.timeTaken !== undefined ? formatTime(r.timeTaken) : 'N/A'}","${r.dateObj?.toLocaleDateString()}"`;
+    });
     
     // --- CORRECCIÓN PARA CODIFICACIÓN UTF-8 EN EXCEL ---
     // Añadimos el BOM (Byte Order Mark) para que Excel reconozca el UTF-8
@@ -503,6 +508,7 @@ const AdminResults = () => {
                   <th className="p-4 font-bold text-gray-600 text-sm">Examen</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Examen</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Simulador</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Promedio Final</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-center">Tiempo Ocupado</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Fecha</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Acciones</th>
@@ -511,11 +517,11 @@ const AdminResults = () => {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={currentUserRole.isInstructor ? "8" : "9"} className="p-8 text-center text-gray-500">Cargando resultados...</td>
+                    <td colSpan={currentUserRole.isInstructor ? "9" : "10"} className="p-8 text-center text-gray-500">Cargando resultados...</td>
                   </tr>
                 ) : filteredResults.length === 0 ? (
                   <tr>
-                    <td colSpan={currentUserRole.isInstructor ? "8" : "9"} className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
+                    <td colSpan={currentUserRole.isInstructor ? "9" : "10"} className="p-8 text-center text-gray-500">No se encontraron evaluaciones.</td>
                   </tr>
                 ) : (
                   currentResults.map((r) => (
@@ -563,6 +569,25 @@ const AdminResults = () => {
                           <span className="px-3 py-1 rounded-full text-sm font-bold bg-purple-100 text-purple-700">{r.simulatorScore}</span>
                         ) : (
                           <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-500">TBD</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-center">
+                        {r.score !== undefined && r.simulatorScore !== undefined ? (
+                          (() => {
+                            const average = (r.score + Number(r.simulatorScore)) / 2;
+                            const isApproved = average >= 60;
+                            return (
+                              <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                                isApproved 
+                                  ? 'bg-cyan-100 text-cyan-700' 
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                {average.toFixed(1)}
+                              </span>
+                            );
+                          })()
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-500">N/A</span>
                         )}
                       </td>
                       <td className="p-4 text-center">
