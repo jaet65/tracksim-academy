@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { db, auth } from '../firebase-config'; // Importamos auth para obtener el usuario actual
-import { collection, getDocs, orderBy, query, doc, getDoc, deleteDoc, addDoc, writeBatch, where } from 'firebase/firestore';
+import { db, auth } from '../firebase-config';
+import { collection, getDocs, orderBy, query, doc, getDoc, deleteDoc, addDoc, writeBatch, where, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat, Upload, Loader, Users } from 'lucide-react';
 import { formatTime } from '../utils/timeUtils'; // Import utility formatTime
@@ -20,6 +20,8 @@ const AdminResults = () => {
   const [currentPage, setCurrentPage] = useState(1); // <-- NUEVO: Para paginación
   const [showExportModal, setShowExportModal] = useState(false); // <-- NUEVO: Para el modal de exportación
   const [resultsPerPage] = useState(20); // <-- NUEVO: Resultados por página
+  const [editingResult, setEditingResult] = useState({ id: null, score: '' }); // <-- NUEVO: Para edición en línea
+  const [editError, setEditError] = useState(''); // <-- NUEVO: Para mostrar errores de edición
   const [currentUserRole, setCurrentUserRole] = useState({ isInstructor: false, company: null }); // <-- NUEVO: Para el rol
 
   const navigate = useNavigate();
@@ -283,6 +285,47 @@ const AdminResults = () => {
     }
   };
 
+  // --- NUEVO: Lógica para edición en línea de la nota del simulador ---
+  const handleScoreClick = (result) => {
+    setEditError(''); // Limpiamos errores anteriores al hacer clic
+    // Solo los admins pueden editar
+    if (currentUserRole.isInstructor) return;
+    setEditingResult({ id: result.id, score: result.simulatorScore !== undefined ? result.simulatorScore : '' });
+  };
+
+  const handleScoreChange = (e) => {
+    setEditingResult(prev => ({ ...prev, score: e.target.value }));
+    setEditError(''); // Limpiamos el error al empezar a corregir
+  };
+
+  const handleSaveScore = async (resultId) => {
+    if (!resultId || editingResult.id !== resultId) return;
+
+    const newScoreValue = editingResult.score;
+
+    // --- MODIFICADO: Validación de rango sin alert() ---
+    if (newScoreValue !== '' && (Number(newScoreValue) < 0 || Number(newScoreValue) > 100)) {
+      setEditError("La nota debe estar entre 0 y 100.");
+      // El return previene que se guarde el valor inválido y mantiene el input abierto.
+      return; 
+    }
+
+    const newScore = newScoreValue === '' ? null : Number(newScoreValue);
+    try {
+      const resultRef = doc(db, "results", resultId);
+      await updateDoc(resultRef, {
+        simulatorScore: newScore === null ? deleteField() : newScore // Usamos deleteField si está vacío
+      });
+      // Actualizar estado local para reflejar el cambio instantáneamente
+      setResults(prev => prev.map(r => r.id === resultId ? { ...r, simulatorScore: newScore === null ? undefined : newScore } : r));
+    } catch (error) {
+      console.error("Error actualizando la nota:", error);
+      alert("No se pudo guardar la nota.");
+    } finally {
+      if (!editError) setEditingResult({ id: null, score: '' }); // Salir del modo edición solo si no hay error
+      setEditingResult({ id: null, score: '' }); // Salir del modo edición
+    }
+  };
   // 5. Aprobar un nuevo intento
   const handleApproveRetake = async (result) => {
     const { studentUid, examId, studentName, examTitle } = result;
@@ -343,6 +386,14 @@ const AdminResults = () => {
           scoresData.forEach(row => {
             const key = `${row.CURP?.trim()}_${row.Examen?.trim()}`;
             const resultToUpdate = resultsMap.get(key);
+
+            // --- NUEVO: Validación de rango para el CSV ---
+            const simulatorScore = Number(row["Nota Simulador"]);
+            if (row["Nota Simulador"] && (isNaN(simulatorScore) || simulatorScore < 0 || simulatorScore > 100)) {
+              // Si la nota no es válida, la omitimos pero continuamos con el resto de la fila (ej. actualizar perfil)
+              console.warn(`Nota inválida (${row["Nota Simulador"]}) para ${row.CURP} en el examen ${row.Examen}. Se omitirá la actualización de la nota.`);
+              delete row["Nota Simulador"]; // Quitamos la nota inválida
+            }
 
             if (resultToUpdate) {
               const resultRef = doc(db, "results", resultToUpdate.id);
@@ -506,10 +557,10 @@ const AdminResults = () => {
                   <th className="p-4 font-bold text-gray-600 text-sm">Alumno</th>
                   <th className="p-4 font-bold text-gray-600 text-sm">Empresa</th>
                   <th className="p-4 font-bold text-gray-600 text-sm">Examen</th>
-                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Examen</th>
-                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Simulador</th>
-                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Promedio Final</th>
-                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Tiempo Ocupado</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Examen</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Simulador</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Final</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm text-center">Tiempo</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Fecha</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-right">Acciones</th>
                 </tr>
@@ -565,10 +616,30 @@ const AdminResults = () => {
                         </span>
                       </td>
                       <td className="p-4 text-center">
-                        {r.simulatorScore !== undefined ? (
-                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-purple-100 text-purple-700">{r.simulatorScore}</span>
+                        {editingResult.id === r.id ? (
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={editingResult.score}
+                              onChange={handleScoreChange}
+                              onBlur={() => handleSaveScore(r.id)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleSaveScore(r.id)}
+                              className={`w-20 text-center border rounded-md shadow-sm outline-none ${editError ? 'border-red-500 ring-2 ring-red-300' : 'border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500'}`}
+                              autoFocus
+                            />
+                            {editError && <div className="absolute left-1/2 -translate-x-1/2 mt-1 text-xs text-red-600 bg-red-100 px-2 py-1 rounded-md w-max shadow-sm">{editError}</div>}
+                          </div>
                         ) : (
-                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-500">TBD</span>
+                          <span 
+                            onClick={() => handleScoreClick(r)} 
+                            className={`px-3 py-1 rounded-full text-sm font-bold transition-all ${
+                              !currentUserRole.isInstructor ? 'cursor-pointer hover:ring-2 hover:ring-purple-400' : ''
+                            } ${
+                              r.simulatorScore !== undefined 
+                                ? 'bg-purple-100 text-purple-700' 
+                                : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >{r.simulatorScore !== undefined ? r.simulatorScore : 'TBD'}</span>
                         )}
                       </td>
                       <td className="p-4 text-center">
