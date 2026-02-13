@@ -7,7 +7,9 @@ import {
   GoogleAuthProvider, 
   signInWithPopup,
   onAuthStateChanged,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  signOut
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Lock, Mail, Loader, AlertCircle, Home, CheckCircle } from 'lucide-react';
@@ -40,6 +42,17 @@ const Login = () => {
 
   // 2. LÓGICA DE DIRECCIONAMIENTO
   const handleRedirectLogic = async (user) => {
+    // --- NUEVO: Verificación de correo electrónico ---
+    // Si el usuario se registró con email/contraseña y no ha verificado su correo, no lo dejamos pasar.
+    const isEmailPasswordUser = user.providerData.some(provider => provider.providerId === 'password');
+    if (isEmailPasswordUser && !user.emailVerified) {
+      setError("Tu correo no ha sido verificado. Por favor, revisa tu bandeja de entrada y haz clic en el enlace de verificación.");
+      setSuccess(''); // Limpiamos cualquier mensaje de éxito
+      await signOut(auth); // Deslogueamos al usuario para forzar la verificación
+      setLoading(false);
+      return; // Detenemos la redirección
+    }
+
     try {
       const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
@@ -109,11 +122,19 @@ const Login = () => {
     try {
       let userCred;
       if (isRegistering) {
+        // --- MEJORADO: Flujo de registro con verificación ---
         userCred = await createUserWithEmailAndPassword(auth, email, password);
+        await sendEmailVerification(userCred.user);
+        await signOut(auth); // Deslogueamos al usuario para que no entre sin verificar
+        setSuccess("¡Cuenta creada! Se ha enviado un correo de verificación. Por favor, revisa tu bandeja de entrada para activar tu cuenta.");
+        setLoading(false);
+        setIsRegistering(false); // Lo regresamos a la pantalla de login
+        return; // Detenemos la ejecución para no redirigir
       } else {
         userCred = await signInWithEmailAndPassword(auth, email, password);
       }
       await handleRedirectLogic(userCred.user);
+
     } catch (err) {
       // --- REFINADO: Manejo de errores contextual (Login vs. Registro) ---
       if (isRegistering) {
