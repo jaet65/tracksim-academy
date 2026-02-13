@@ -62,8 +62,8 @@ service cloud.firestore {
       // Un instructor puede leer o eliminar resultados de su propia empresa.
       allow read, delete: if isInstructor() && getUserData().company == resource.data.studentCompany;
 
-      // IMPORTANTE: Se prohíbe explícitamente la actualización de resultados para evitar trampas.
-      allow update: if false;
+      // Un administrador puede actualizar un resultado (ej. para añadir la nota del simulador).
+      allow update: if isAdmin();
     }
 
     // =================================

@@ -114,7 +114,7 @@ const AdminResults = () => {
 
   // 3. Exportar a CSV (Excel simple)
   const exportToCSV = (filterType) => {
-    const headers = ["Nombre,CURP,Empresa,Examen,Calificacion,Nota Simulador,Tiempo Ocupado,Fecha"];
+    const headers = ["Nombre,CURP,Empresa,RFC,Examen,Calificacion,Nota Simulador,Tiempo Ocupado,Fecha"];
 
     // Primero, filtramos los resultados según el criterio de búsqueda actual
     let resultsToProcess = filteredResults;
@@ -136,17 +136,21 @@ const AdminResults = () => {
     });
 
     const rows = latestResults.map(r =>
-      `"${r.studentName}","${r.studentCurp}","${r.studentCompany}","${r.examTitle}","${r.score}","${r.simulatorScore !== undefined ? r.simulatorScore : 'TBD'}","${r.timeTaken !== undefined ? formatTime(r.timeTaken) : 'N/A'}","${r.dateObj?.toLocaleDateString()}"`
+      `"${r.studentName}","${r.studentCurp}","${r.studentCompany}","${r.studentCompanyRfc || ''}","${r.examTitle}","${r.score}","${r.simulatorScore !== undefined ? r.simulatorScore : 'TBD'}","${r.timeTaken !== undefined ? formatTime(r.timeTaken) : 'N/A'}","${r.dateObj?.toLocaleDateString()}"`
     );
     
-    const csvContent = "data:text/csv;charset=utf-8," + headers.concat(rows).join("\n");
-    const encodedUri = encodeURI(csvContent);
+    // --- CORRECCIÓN PARA CODIFICACIÓN UTF-8 EN EXCEL ---
+    // Añadimos el BOM (Byte Order Mark) para que Excel reconozca el UTF-8
+    const csvString = headers.concat(rows).join("\n");
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", "reporte_dc3.csv");
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link); // Limpiamos el elemento del DOM
+    document.body.removeChild(link);
     setShowExportModal(false); // Cerramos el modal después de la descarga
   };
 
@@ -308,7 +312,7 @@ const AdminResults = () => {
       encoding: "ISO-8859-1",
       complete: async (parsedResults) => {
         const scoresData = parsedResults.data;
-        if (!scoresData.length || !scoresData[0].CURP || !scoresData[0].Examen || !scoresData[0]["Nota Simulador"]) {
+        if (!scoresData.length || !scoresData[0]?.CURP || !scoresData[0]?.Examen || scoresData[0]?.["Nota Simulador"] === undefined) {
           alert("El archivo CSV no tiene el formato correcto. Asegúrate de que contenga las columnas 'CURP', 'Examen' y 'Nota Simulador'.");
           setUploading(false);
           e.target.value = null;
@@ -337,8 +341,30 @@ const AdminResults = () => {
 
             if (resultToUpdate) {
               const resultRef = doc(db, "results", resultToUpdate.id);
-              batch.update(resultRef, { simulatorScore: row["Nota Simulador"] });
+              const userRef = doc(db, "users", resultToUpdate.studentUid);
+
+              // 1. Preparamos la actualización para el documento del resultado
+              const updatePayload = { simulatorScore: row["Nota Simulador"] };
+
+              // 2. Preparamos la actualización para el perfil del usuario (si se proporcionan datos en el CSV)
+              const userUpdatePayload = {};
+              if (row["Nombre"]) userUpdatePayload.fullName = row["Nombre"];
+              if (row["Empresa"]) userUpdatePayload.company = row["Empresa"];
+              if (row["RFC"]) userUpdatePayload.companyRfc = row["RFC"];
+
+              // 3. Si hay cambios en el perfil, los aplicamos al usuario y al resultado
+              if (Object.keys(userUpdatePayload).length > 0) {
+                batch.update(userRef, userUpdatePayload);
+                // También actualizamos la copia denormalizada en el resultado
+                if (userUpdatePayload.fullName) updatePayload.studentName = userUpdatePayload.fullName;
+                if (userUpdatePayload.company) updatePayload.studentCompany = userUpdatePayload.company;
+                if (userUpdatePayload.companyRfc) updatePayload.studentCompanyRfc = userUpdatePayload.companyRfc;
+              }
+
+              // 4. Añadimos la actualización del resultado al batch
+              batch.update(resultRef, updatePayload);
               updatedCount++;
+
             } else {
               notFound.push(`${row.CURP} - ${row.Examen}`);
             }
@@ -473,8 +499,8 @@ const AdminResults = () => {
                     </th>
                   )}
                   <th className="p-4 font-bold text-gray-600 text-sm">Alumno</th>
-                  <th className="p-4 font-bold text-gray-600 text-sm">CURP / Empresa</th>
-                  <th className="p-4 font-bold text-gray-600 text-sm">Nombre Examen</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm">Empresa</th>
+                  <th className="p-4 font-bold text-gray-600 text-sm">Examen</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Examen</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-center">Nota Simulador</th>
                   <th className="p-4 font-bold text-gray-600 text-sm text-center">Tiempo Ocupado</th>
@@ -505,22 +531,20 @@ const AdminResults = () => {
                           />
                         </td>
                       )}
-                      <td className="p-4 flex items-center gap-2">
+                      <td className="p-4">
                         <div>
                           <div className="font-bold text-gray-800">{r.studentName}</div>
+                          <div className="font-mono text-xs bg-gray-100 px-2 py-1 rounded w-fit text-gray-600 mt-1">{r.studentCurp}</div>
                           {r.attempt > 1 && (
-                            <span className="text-xs font-bold bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+                            <span className="mt-1 inline-block text-xs font-bold bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
                               Intento #{r.attempt}
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-400 md:hidden">{r.studentCompany}</div>
                       </td>
                       <td className="p-4">
-                        <div className="font-mono text-xs bg-gray-100 px-2 py-1 rounded w-fit text-gray-600 mb-1">
-                          {r.studentCurp}
-                        </div>
                         <div className="text-sm text-gray-500">{r.studentCompany}</div>
+                        <div className="font-mono text-xs text-gray-400">{r.studentCompanyRfc}</div>
                       </td>
                       <td className="p-4 text-sm text-gray-600 max-w-xs truncate">
                         {r.examTitle}
@@ -696,7 +720,10 @@ const AdminResults = () => {
                 </div>
               )}
             </label>
-            <div className="mt-4 text-center text-xs text-gray-400">Columnas requeridas: <span className="font-mono bg-gray-100 px-1 rounded">CURP</span>, <span className="font-mono bg-gray-100 px-1 rounded">Examen</span>, <span className="font-mono bg-gray-100 px-1 rounded">Nota Simulador</span></div>
+            <div className="mt-4 text-center text-xs text-gray-400">
+              <p>Columnas requeridas: <span className="font-mono bg-gray-100 px-1 rounded">CURP</span>, <span className="font-mono bg-gray-100 px-1 rounded">Examen</span>, <span className="font-mono bg-gray-100 px-1 rounded">Nota Simulador</span></p>
+              <p className="mt-1">Columnas opcionales para editar: <span className="font-mono bg-gray-100 px-1 rounded">Nombre</span>, <span className="font-mono bg-gray-100 px-1 rounded">Empresa</span>, <span className="font-mono bg-gray-100 px-1 rounded">RFC</span></p>
+            </div>
           </div>
         )}
 
