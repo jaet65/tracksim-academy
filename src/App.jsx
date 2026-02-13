@@ -33,6 +33,7 @@ function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/resultados" element={<AdminResults />} />
         <Route path="/admin/usuarios" element={<AdminUsers />} /> {/* <-- Nueva ruta */}
+        <Route path="/admin/editar-usuario/:userId" element={<EditProfile />} /> {/* <-- NUEVO: Para que el admin edite */}
         
         {/* Redirección por defecto */}
         <Route path="*" element={<Navigate to="/" />} />

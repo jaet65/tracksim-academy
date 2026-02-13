@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
 import { collection, getDocs, doc, deleteDoc, orderBy, query, where, addDoc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { LogOut, ArrowLeft, Search, Trash2, Users, List, Repeat, Loader, X, GraduationCap } from 'lucide-react';
+import { LogOut, ArrowLeft, Search, Trash2, Users, List, Repeat, Loader, X, GraduationCap, Edit } from 'lucide-react';
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -167,6 +167,9 @@ const AdminUsers = () => {
                           <>
                             <button onClick={() => navigate(`/admin/resultados?search=${encodeURIComponent(user.fullName)}`)} className="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-100 transition" title={`Ver resultados de ${user.fullName}`}>
                               <List size={18} />
+                            </button>
+                            <button onClick={() => navigate(`/admin/editar-usuario/${user.id}`)} className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition" title={`Editar perfil de ${user.fullName}`}>
+                              <Edit size={18} />
                             </button>
                             <button onClick={() => handleToggleInstructor(user)} className={`${user.isInstructor ? 'text-yellow-600' : 'text-green-500'} p-2 rounded-full hover:bg-green-100 transition`} title={user.isInstructor ? `Degradar a Alumno` : `Promover a Instructor`}>
                               <GraduationCap size={18} />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { User, Briefcase, Fingerprint, Building, Hash, Loader, ArrowLeft } from 'lucide-react';
 
 const EditProfile = () => {
@@ -19,15 +19,20 @@ const EditProfile = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
+  const { userId } = useParams(); // <-- NUEVO: Obtener el ID del usuario de la URL si existe
 
   useEffect(() => {
     const fetchUserData = async () => {
-      const user = auth.currentUser;
-      if (user) {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        // Determinar qué ID de usuario usar: el de la URL (admin) o el propio (alumno)
+        const targetUserId = userId || currentUser.uid;
+
         try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
+          const userDoc = await getDoc(doc(db, "users", targetUserId));
           if (userDoc.exists()) {
             const dbData = userDoc.data();
+            // CORRECCIÓN: Usar los campos desglosados si existen, si no, construir desde fullName
             const nameParts = (dbData.fullName || '').split(' ');
             const first = nameParts[0] || '';
             setFormData({
@@ -51,7 +56,7 @@ const EditProfile = () => {
     };
     fetchUserData();
   }, [navigate]);
-
+  
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -64,18 +69,19 @@ const EditProfile = () => {
     setError('');
     setSuccess('');
 
-    const user = auth.currentUser;
-    if (!user) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
       setError("Sesión expirada. Por favor, inicia sesión de nuevo.");
       setSaving(false);
       return;
     }
 
+    const targetUserId = userId || currentUser.uid;
+
     try {
       // Reconstruimos el nombre completo antes de guardar
-      const fullName = `${formData.firstName.trim()} ${formData.paternalLastName.trim()} ${formData.maternalLastName.trim()}`;
-      await updateDoc(doc(db, "users", user.uid), {
-        fullName: fullName,
+      const updatedProfileData = {
+        fullName: `${formData.firstName.trim()} ${formData.paternalLastName.trim()} ${formData.maternalLastName.trim()}`,
         firstName: formData.firstName.trim(),
         paternalLastName: formData.paternalLastName.trim(),
         maternalLastName: formData.maternalLastName.trim(),
@@ -83,8 +89,40 @@ const EditProfile = () => {
         occupation: formData.occupation,
         company: formData.company,
         companyRfc: formData.companyRfc,
-      });
+      };
+
+      const batch = writeBatch(db);
+
+      // 1. Actualizar el documento principal del usuario
+      const userRef = doc(db, "users", targetUserId);
+      batch.update(userRef, updatedProfileData);
+
+      // 2. Si es un admin editando, actualizar todos los resultados históricos del usuario
+      if (userId) {
+        const resultsQuery = query(collection(db, "results"), where("studentUid", "==", targetUserId));
+        const resultsSnapshot = await getDocs(resultsQuery);
+        
+        const denormalizedData = {
+          studentName: updatedProfileData.fullName,
+          studentCurp: updatedProfileData.curp,
+          studentFirstName: updatedProfileData.firstName,
+          studentPaternalLastName: updatedProfileData.paternalLastName,
+          studentMaternalLastName: updatedProfileData.maternalLastName,
+          studentCompany: updatedProfileData.company,
+          studentCompanyRfc: updatedProfileData.companyRfc,
+        };
+
+        resultsSnapshot.forEach((resultDoc) => {
+          batch.update(resultDoc.ref, denormalizedData);
+        });
+      }
+
+      await batch.commit();
       setSuccess("¡Perfil actualizado con éxito!");
+      if (userId) {
+        setTimeout(() => navigate('/admin/usuarios'), 2000);
+      }
+
     } catch (err) {
       setError("No se pudo actualizar tu perfil. Inténtalo de nuevo.");
     } finally {
@@ -104,7 +142,8 @@ const EditProfile = () => {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
         <div className="flex items-center justify-between mb-8">
-          <button onClick={() => navigate('/portal')} className="text-gray-500 hover:text-blue-600">
+          {/* --- CORREGIDO: El botón de regreso ahora es contextual --- */}
+          <button onClick={() => navigate(userId ? '/admin/usuarios' : '/portal')} className="text-gray-500 hover:text-blue-600">
             <ArrowLeft size={24} />
           </button>
           <h1 className="text-2xl font-bold text-gray-800">Editar Perfil</h1>
