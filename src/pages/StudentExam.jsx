@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useBeforeUnload } from 'react-router-dom';
 import { db, auth } from '../firebase-config'; // <-- NUEVO
 import { doc, getDoc, addDoc, collection, query, where, getDocs, limit, deleteDoc, orderBy } from 'firebase/firestore';
@@ -19,11 +19,12 @@ import ExamRules from '../components/ExamRules';
 import StudyGuideModal from '../components/StudyGuideModal'; // <-- NUEVO
 import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
 import BreakScreen from '../components/BreakScreen'; // <-- NUEVO: Pantalla de descanso
+import timeWarningSound from '../assets/sounds/time-warning.mp3'; // <-- NUEVO: Sonido de advertencia
 
 const MAX_VISIBILITY_WARNINGS = 2; // Número de advertencias permitidas antes de finalizar el examen
 // --- NUEVO: Constantes para los descansos ---
 const BREAK_INTERVAL_QUESTIONS = 60; // Descanso cada 60 preguntas
-const BREAK_INTERVAL_TIME_SECONDS = 30 * 60; // Descanso cada 20 minutos
+const BREAK_INTERVAL_TIME_SECONDS = 30 * 60; // Descanso cada 30 minutos
 const BREAK_DURATION_SECONDS = 5 * 60; // Duración del descanso de 5 minutos
 
 const StudentExam = () => {
@@ -48,21 +49,97 @@ const StudentExam = () => {
   // --- NUEVO: Estados para la guía de estudio ---
   const [showStudyGuide, setShowStudyGuide] = useState(false);
   const [studyGuideContent, setStudyGuideContent] = useState(null);
+  // --- NUEVO: Estado para la notificación de tiempo ---
+  const [showTimeWarning, setShowTimeWarning] = useState(false);
+  // --- NUEVO: Estado para la notificación de fin de tiempo ---
+  const [showTimeUpNotification, setShowTimeUpNotification] = useState(false);
 
   // --- Uso de Hooks Personalizados ---
   const { exam, loading } = useExamData(id);
   const { currentQuestionIndex, setCurrentQuestionIndex, answers, handleSelectOption, clearProgress } = useExamProgress(exam, id, finished);
-  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound } = useAntiCheat(descriptionAccepted && rulesAccepted && !finished, () => finishExam(true));  // --- NUEVO: Duración dinámica del examen ---
-  const examDurationInSeconds = exam?.duration ? exam.duration * 60 : 45 * 60;
   
-  const onTimeUp = () => { setTimeUp(true); finishExam(); };
-  // Pasamos la duración dinámica al hook del temporizador
-  // --- MODIFICADO: Pausar el timer durante el descanso ---
+  // --- CORRECCIÓN: Declarar el timer y onTimeUp ANTES de finishExam para romper la dependencia circular ---
+  const examDurationInSeconds = exam?.duration ? exam.duration * 60 : 45 * 60;
+  const timeUpAudioRef = useRef(new Audio(timeWarningSound));
+
+  // Esta función se pasará al temporizador, pero su contenido se definirá más tarde
+  const onTimeUpCallbackRef = useRef(() => {});
+
   const { timeLeft, formatTime, initialTimeInSeconds } = useExamTimer(
-    finished || loading || !rulesAccepted || !descriptionAccepted || onBreak, // Pausar si está en descanso
-    onTimeUp, 
+    finished || loading || !rulesAccepted || !descriptionAccepted || onBreak,
+    () => onTimeUpCallbackRef.current(), 
     examDurationInSeconds
   );
+
+  // --- CORRECCIÓN: Mover la declaración de finishExam antes de su uso ---
+  const finishExam = useCallback(async (isCheating = false) => {
+    if (!exam || finished) {
+      // stopSound(); // stopSound no está disponible aquí, pero se llama dentro de useAntiCheat
+      return;
+    }
+
+    setFinished(true);
+    // exitFullscreen(); // exitFullscreen no está disponible aquí, pero se llama dentro de useAntiCheat
+
+    const timeTakenInSeconds = (exam?.duration * 60) - timeLeft;
+    setDisplayTimeTaken(timeTakenInSeconds);
+
+    setShowWarningModal(false);
+    setShowConfirmFinishModal(false);
+
+    if (isCheating) setTerminatedForCheating(true);
+
+    let correctCount = 0;
+    exam.questions.forEach((q, index) => {
+      if (answers[index] === q.correctOption) {
+        correctCount++;
+      }
+    });
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+    const studentData = userDoc.exists() ? userDoc.data() : {};
+
+    try {
+      const resultsQuery = query(collection(db, "results"), where("studentUid", "==", currentUser.uid), where("examId", "==", id));
+      const previousResults = await getDocs(resultsQuery);
+      const attemptNumber = previousResults.size + 1;
+      const finalScore = Number(((correctCount / exam.questions.length) * 100).toFixed(2));
+
+      setScore(finalScore);
+      setAttempt(attemptNumber);
+
+      await addDoc(collection(db, "results"), {
+        examId: id, examTitle: exam.title,
+        studentName: studentData.fullName || "Sin Nombre", studentFirstName: studentData.firstName || '',
+        studentPaternalLastName: studentData.paternalLastName || '', studentMaternalLastName: studentData.maternalLastName || '',
+        studentCurp: studentData.curp || "N/A", studentOccupation: studentData.occupation || "N/A",
+        studentCompany: studentData.company || "N/A", studentCompanyRfc: studentData.companyRfc || "N/A",
+        studentEmail: currentUser.email, studentUid: currentUser.uid,
+        score: finalScore, totalQuestions: exam.questions.length, attempt: attemptNumber,
+        studentAnswers: answers, examQuestions: exam.questions, correctAnswers: correctCount,
+        approved: finalScore >= 60, timeTaken: timeTakenInSeconds,
+        timestamp: new Date()
+      });
+
+      clearProgress();
+    } catch (e) {
+      console.error("Error guardando resultado", e);
+    }
+  }, [exam, finished, answers, id, clearProgress, timeLeft]);
+
+  // Ahora que finishExam existe, definimos el comportamiento de onTimeUp
+  onTimeUpCallbackRef.current = () => {
+    setTimeUp(true);
+    setShowTimeUpNotification(true);
+    timeUpAudioRef.current.play().catch(e => console.error("Error al reproducir sonido de fin de tiempo:", e));
+    setTimeout(() => setShowTimeUpNotification(false), 5000);
+    finishExam();
+  };
+
+  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen, exitFullscreen, stopSound } = useAntiCheat(descriptionAccepted && rulesAccepted && !finished, () => finishExam(true));
 
   // --- DEBUG: Console logs para verificar el flujo de datos (eliminados) ---
   
@@ -84,6 +161,19 @@ const StudentExam = () => {
     }
   }, [finished]));
 
+  // --- NUEVO: Efecto para la notificación de tiempo restante ---
+  const timeWarningAudioRef = useRef(new Audio(timeWarningSound));
+  useEffect(() => {
+    if (timeLeft === 60 && !finished && !onBreak) {
+      setShowTimeWarning(true);
+      timeWarningAudioRef.current.play().catch(e => console.error("Error al reproducir sonido:", e));
+
+      const timer = setTimeout(() => {
+        setShowTimeWarning(false);
+      }, 10000); // La notificación se oculta después de 10 segundos
+      return () => clearTimeout(timer);
+    }
+  }, [timeLeft, finished, onBreak]);
   // --- NUEVO: Lógica para activar los descansos ---
   useEffect(() => {
     if (loading || !exam || finished || onBreak) return;
@@ -148,99 +238,6 @@ const StudentExam = () => {
     }
     setShowStudyGuide(true);
   };
-
-
-  // 4. Finalizar y Calificar
-  const finishExam = useCallback(async (isCheating = false) => {
-    if (!exam || finished) {
-      stopSound();
-      return;
-    }
-
-    // --- CORRECCIÓN: Salir de pantalla completa ---
-    setFinished(true); // Marcar como finalizado PRIMERO
-    exitFullscreen(); // Luego salir de pantalla completa
-
-    // Calculate time taken
-    const timeTakenInSeconds = initialTimeInSeconds - timeLeft; // Calculate time taken
-    setDisplayTimeTaken(timeTakenInSeconds); // Store for display
-
-    // Detenemos el sonido y cerramos el modal de advertencia ANTES de hacer el resto.
-    setShowWarningModal(false);
-    setShowConfirmFinishModal(false);
-
-    if (isCheating) setTerminatedForCheating(true);
-    // Calculamos la nota
-    let correctCount = 0;
-    exam.questions.forEach((q, index) => {
-      if (answers[index] === q.correctOption) { // answers[index] now holds the ORIGINAL index
-        correctCount++;
-      }
-    });
-
-    // Guardar el resultado en Firebase (Opcional, para el registro)
-    let studentData = {};
-    
-    // --- CORRECCIÓN: Obtener el usuario actual directamente aquí ---
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDoc.exists()) {
-            studentData = userDoc.data();
-        }
-    }
-
-    try {
-      // Contar intentos previos para este examen y alumno
-      const resultsQuery = query(collection(db, "results"), where("studentUid", "==", currentUser.uid), where("examId", "==", id));
-      const previousResults = await getDocs(resultsQuery);
-      const attemptNumber = previousResults.size + 1;
-      const finalScore = Number(((correctCount / exam.questions.length) * 100).toFixed(2));
-
-      setScore(finalScore);
-      setAttempt(attemptNumber); // Guardamos el intento en el estado
-
-      console.log(`Guardando intento #${attemptNumber} para el examen "${exam.title}"...`);
-
-      await addDoc(collection(db, "results"), {
-        examId: id,
-        examTitle: exam.title,
-        
-        // Datos del Alumno (DC-3)
-        studentName: studentData.fullName || "Sin Nombre",
-        studentFirstName: studentData.firstName || '',
-        studentPaternalLastName: studentData.paternalLastName || '',
-        studentMaternalLastName: studentData.maternalLastName || '',
-        studentCurp: studentData.curp || "N/A",
-        studentOccupation: studentData.occupation || "N/A",
-        studentCompany: studentData.company || "N/A",
-        studentCompanyRfc: studentData.companyRfc || "N/A",
-        studentEmail: currentUser ? currentUser.email : "N/A", // <-- Guardamos el email del usuario
-        studentUid: currentUser ? currentUser.uid : "anon",
-        
-        // Datos Académicos
-        score: finalScore,
-        totalQuestions: exam.questions.length,
-        attempt: attemptNumber, // <-- Guardamos el número de intento
-        
-        // Guardamos las respuestas para poder regenerar la constancia
-        studentAnswers: answers,
-        examQuestions: exam.questions,
-        correctAnswers: correctCount,
-        approved: finalScore >= 60, // Puedes definir aquí la nota aprobatoria (ej. 8.0)
-        timeTaken: timeTakenInSeconds, // Store time taken
-        
-        timestamp: new Date()
-      });
-      
-      // Limpiamos el progreso del examen del localStorage
-      clearProgress();
-      
-    } catch (e) {
-      console.error("Error guardando resultado", e);
-    } finally {
-    } // Add timeLeft and initialTimeInSeconds to dependencies
-  }, [exam, finished, answers, id, clearProgress, stopSound, setShowWarningModal, exitFullscreen, timeLeft, initialTimeInSeconds]);
 
 
   const handleAcceptRulesAndFullscreen = () => {
@@ -385,6 +382,16 @@ const StudentExam = () => {
             height={windowSize.height}
           />
         )}
+        {/* --- NUEVO: Notificación de tiempo agotado --- */}
+        {showTimeUpNotification && (
+          <div className="fixed top-0 left-0 right-0 bg-red-500 text-white p-3 text-center font-bold z-50 shadow-lg">
+            <div className="flex items-center justify-center gap-2">
+              <Clock />
+              ¡El tiempo se ha agotado!
+            </div>
+          </div>
+        )}
+
         <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full">
           <div className="mb-4 flex justify-center text-center">
             {passed ? (
@@ -568,6 +575,16 @@ const StudentExam = () => {
       onCut={(e) => e.preventDefault()}        // Disable cut
       onPaste={(e) => e.preventDefault()}      // Disable paste
     >
+      {/* --- NUEVO: Notificación de tiempo restante --- */}
+      {showTimeWarning && (
+        <div className="fixed top-0 left-0 right-0 bg-yellow-400 text-yellow-900 p-3 text-center font-bold z-50 shadow-lg animate-pulse">
+          <div className="flex items-center justify-center gap-2">
+            <AlertCircle />
+            ¡Queda 1 minuto para finalizar el examen!
+          </div>
+        </div>
+      )}
+
       {/* Header con Timer */}
       <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
