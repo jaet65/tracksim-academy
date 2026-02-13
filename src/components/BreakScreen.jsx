@@ -4,7 +4,7 @@ import logo from '../assets/Logo W.png'; // <-- NUEVO: Importamos el logo
 import alarmSound from '../assets/sounds/alarm.mp3'; // <-- NUEVO: Importamos el sonido
 import { SkipForward } from 'lucide-react'; // <-- NUEVO: Icono para el botón
 
-const BreakScreen = ({ timeLeft, durationInSeconds, onBreakFinish, videoSrc, isFirstBreak }) => {
+const BreakScreen = ({ breakTimeLeft, durationInSeconds, onBreakFinish, videoSrc, isFirstBreak, examTimeLeft, currentQuestion, totalQuestions }) => {
   // --- NUEVO: Estado para controlar la visibilidad del video ---
   const [videoMounted, setVideoMounted] = useState(true);
   const [videoOpacity, setVideoOpacity] = useState(1); // 1 para visible, 0 para invisible
@@ -26,22 +26,22 @@ const BreakScreen = ({ timeLeft, durationInSeconds, onBreakFinish, videoSrc, isF
   // Se ejecuta solo una vez cuando el tiempo llega a 30.
   useEffect(() => {
     const audio = audioRef.current;
-    if (timeLeft === 30) {
+    if (breakTimeLeft === 30) {
       audio.loop = true;
       audio.play().catch(error => console.error("Error al reproducir el sonido:", error));
     }
-  }, [timeLeft]);
+  }, [breakTimeLeft]);
 
   // Efecto 2: Se encarga de DETENER el sonido cuando el tiempo se acaba.
   // Se ejecuta solo una vez cuando el tiempo llega a 1.
   useEffect(() => {
     const audio = audioRef.current;
-    if (timeLeft <= 1) {
+    if (breakTimeLeft <= 1) {
       audio.pause();
       audio.currentTime = 0;
       audio.loop = false;
     }
-  }, [timeLeft]);
+  }, [breakTimeLeft]);
 
   // Efecto 3: Se encarga de la LIMPIEZA.
   // Se ejecuta solo cuando el componente se desmonta para asegurar que el sonido se detenga.
@@ -57,14 +57,14 @@ const BreakScreen = ({ timeLeft, durationInSeconds, onBreakFinish, videoSrc, isF
   // --- NUEVO: Lógica para el círculo de progreso ---
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
-  const progress = (timeLeft / durationInSeconds);
+  const progress = (breakTimeLeft / durationInSeconds);
   const strokeDashoffset = circumference * (1 - progress);
 
   // --- NUEVO: Lógica para cambiar el color del círculo ---
-  const circleColor = timeLeft <= 30 ? '#ef4444' : '#4ade80'; // Cambia a rojo (red-500) cuando quedan 30s o menos
+  const circleColor = breakTimeLeft <= 30 ? '#ef4444' : '#4ade80'; // Cambia a rojo (red-500) cuando quedan 30s o menos
 
   // --- NUEVO: Lógica para el parpadeo de la pantalla ---
-  const isAlarmActive = timeLeft <= 30 && timeLeft > 1;
+  const isAlarmActive = breakTimeLeft <= 30 && breakTimeLeft > 1;
 
   return (
     <div className={`fixed inset-0 bg-gradient-to-br from-gray-900 to-gray-800 z-50 flex items-center justify-center p-8 text-white text-center transition-all duration-500 ${isAlarmActive ? 'shadow-[inset_0_0_0_8px_rgba(239,68,68,0.5)] animate-pulse' : 'shadow-none'}`}>
@@ -88,11 +88,18 @@ const BreakScreen = ({ timeLeft, durationInSeconds, onBreakFinish, videoSrc, isF
         <div className="flex flex-col items-center justify-center">
           <img src={logo} alt="TrackSIM Academy" className="h-60 mb-6" />
           <h2 className="text-4xl font-bold mb-2 tracking-tight">Tiempo de Descanso</h2>
+          {/* --- NUEVO: Información del estado del examen --- */}
+          <div className="flex justify-center items-center gap-4 mb-5 text-sm text-gray-300">
+            <span>Pregunta: <strong>{currentQuestion} / {totalQuestions}</strong></span>
+            <span>|</span>
+            <span>Tiempo de examen restante: <strong>{formatTime(examTimeLeft)}</strong></span>
+          </div>
+
           <p className="text-xl text-gray-400 mb-5">
             Aprovecha para estirarte. El examen se reanudará automáticamente.
           </p>
           <p className="text-2xl text-red-400 mb-5">
-            Recuerda que aun durante el descaso, no puedes abandonar la pantalla ni minimizar la ventana.
+            Recuerda que aun durante el descanso, no puedes abandonar la pantalla ni minimizar la ventana.
           </p>
 
           {/* Temporizador con Círculo de Progreso */}
@@ -118,7 +125,7 @@ const BreakScreen = ({ timeLeft, durationInSeconds, onBreakFinish, videoSrc, isF
                 className="transition-all duration-1000"
               />
             </svg>
-            <span className="relative font-mono text-5xl font-bold text-white">{formatTime(timeLeft)}</span>
+            <span className="relative font-mono text-5xl font-bold text-white">{formatTime(breakTimeLeft)}</span>
           </div>
 
           {/* Botón para omitir el descanso */}

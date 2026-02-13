@@ -518,11 +518,14 @@ const StudentExam = () => {
   if (onBreak && !showWarningModal) {
     return (
       <BreakScreen 
-        timeLeft={breakTimeLeft} // <-- Pasamos el tiempo restante
+        breakTimeLeft={breakTimeLeft} // <-- Pasamos el tiempo restante del descanso
         durationInSeconds={BREAK_DURATION_SECONDS}
         onBreakFinish={handleBreakFinish} // onBreakFinish ya no se usa en BreakScreen, pero lo dejamos por si acaso
         isFirstBreak={breaksTaken.questions + breaksTaken.time === 1}
         videoSrc={breakVideo}
+        examTimeLeft={timeLeft} // <-- NUEVO: Tiempo restante del examen
+        currentQuestion={currentQuestionIndex + 1} // <-- NUEVO: Pregunta actual
+        totalQuestions={exam.questions.length} // <-- NUEVO: Total de preguntas
       />
     );
   }
