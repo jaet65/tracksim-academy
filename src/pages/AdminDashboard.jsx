@@ -483,7 +483,7 @@ const AdminDashboard = () => {
       </nav>
 
       {/* Contenido Principal */}
-      <main className="max-w-4xl mx-auto mt-10 p-6">
+      <main className="max-w-4xl mx-auto p-3">
         <div className="bg-white rounded-xl shadow-md p-8 text-center border-t-4 border-blue-600">
           
           <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -553,7 +553,7 @@ const AdminDashboard = () => {
 
           {/* Área de carga de archivo */}
           <label className={`
-            block w-full max-w-md mx-auto border-2 border-dashed rounded-lg p-8 cursor-pointer transition-all
+            block w-full max-w-md mx-auto border-2 border-dashed rounded-lg p-2 cursor-pointer transition-all
             ${loading ? 'bg-gray-50 border-gray-300' : 'border-blue-300 hover:bg-blue-50 hover:border-blue-500'}
             ${!examTitle.trim() && !loading ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''} 
           `}>
@@ -581,7 +581,8 @@ const AdminDashboard = () => {
 
           <div className="mt-8 text-xs text-gray-400">
             Columnas requeridas en Excel: <br/>
-            <span className="font-mono bg-gray-100 px-1 rounded">Pregunta, Opcion A, Opcion B, Opcion C, (Opcion D), Respuesta</span>
+            <span className="font-mono bg-gray-100 px-1 rounded">Pregunta, Opcion A, Opcion B, Opcion C, Opcion D, (A/B/C/D)</span><br/>
+            <span className="font-mono bg-gray-100 px-1 rounded">Pregunta Verdadero/Falso, [], [], [], [], (Verdadero/Falso)</span>
           </div>
 
         </div>
