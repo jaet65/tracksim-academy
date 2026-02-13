@@ -9,7 +9,9 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   sendEmailVerification,
-  signOut
+  signOut,
+  setPersistence,
+  browserSessionPersistence
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Lock, Mail, Loader, AlertCircle, Home, CheckCircle } from 'lucide-react';
@@ -42,13 +44,13 @@ const Login = () => {
 
   // 2. LÓGICA DE DIRECCIONAMIENTO
   const handleRedirectLogic = async (user) => {
-    // --- NUEVO: Verificación de correo electrónico ---
+    // --- RESTAURADO: Verificación de correo electrónico ---
     // Si el usuario se registró con email/contraseña y no ha verificado su correo, no lo dejamos pasar.
     const isEmailPasswordUser = user.providerData.some(provider => provider.providerId === 'password');
-    if (isEmailPasswordUser && !user.emailVerified) {
-      setError("Tu correo no ha sido verificado. Por favor, revisa tu bandeja de entrada y haz clic en el enlace de verificación.");
+    if (isEmailPasswordUser && !user.emailVerified && !isRegistering) { // <-- CORRECCIÓN: No mostrar este error justo al registrarse
+      setError("Tu correo no ha sido verificado. Revisa tu bandeja de entrada (y spam).");
       setSuccess(''); // Limpiamos cualquier mensaje de éxito
-      await signOut(auth); // Deslogueamos al usuario para forzar la verificación
+      // NO deslogueamos al usuario para poder reenviar el correo.
       setLoading(false);
       return; // Detenemos la redirección
     }
@@ -101,6 +103,8 @@ const Login = () => {
     setLoading(true);
     
     try {
+      // --- NUEVO: Establecer persistencia de sesión ---
+      await setPersistence(auth, browserSessionPersistence);
       // Esto abrirá la ventanita. Como arreglamos vite.config.js, ya no fallará.
       const result = await signInWithPopup(auth, provider);
       // Cuando la ventanita se cierra con éxito:
@@ -120,12 +124,14 @@ const Login = () => {
     setSuccess('');
     setLoading(true);
     try {
+      // --- NUEVO: Establecer persistencia de sesión ---
+      await setPersistence(auth, browserSessionPersistence);
       let userCred;
       if (isRegistering) {
-        // --- MEJORADO: Flujo de registro con verificación ---
+        // --- RESTAURADO: Flujo de registro con verificación ---
         userCred = await createUserWithEmailAndPassword(auth, email, password);
         await sendEmailVerification(userCred.user);
-        await signOut(auth); // Deslogueamos al usuario para que no entre sin verificar
+        await signOut(auth); // Deslogueamos para que no entre sin verificar
         setSuccess("¡Cuenta creada! Se ha enviado un correo de verificación. Por favor, revisa tu bandeja de entrada para activar tu cuenta.");
         setLoading(false);
         setIsRegistering(false); // Lo regresamos a la pantalla de login
@@ -185,6 +191,27 @@ const Login = () => {
       setLoading(false);
     }
   };
+
+  // --- NUEVO: Función para reenviar el correo de verificación ---
+  const handleResendVerification = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      setError("No hay una sesión activa para reenviar el correo. Por favor, intenta iniciar sesión de nuevo.");
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      await sendEmailVerification(user);
+      setSuccess("Se ha enviado un nuevo correo de verificación. Revisa tu bandeja de entrada.");
+    } catch (error) {
+      setError(`Error al reenviar el correo: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (checkingAuth) {
     return (
       <div className="min-h-screen flex justify-center items-center bg-gray-100">
@@ -206,7 +233,14 @@ const Login = () => {
 
         {error && (
           <div className="bg-red-50 text-red-700 p-3 rounded mb-4 text-sm flex gap-2 items-center">
-            <AlertCircle size={16} /> {error}
+            <AlertCircle size={16} />
+            <div>
+              {error}
+              {/* --- NUEVO: Botón para reenviar --- */}
+              {error.includes("verificado") && (
+                <button onClick={handleResendVerification} disabled={loading} className="font-bold underline ml-2 hover:text-red-800">Reenviar correo</button>
+              )}
+            </div>
           </div>
         )}
 
