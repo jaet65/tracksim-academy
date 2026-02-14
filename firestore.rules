@@ -49,21 +49,22 @@ service cloud.firestore {
     // =================================
     // Colección: results
     // =================================
-		match /results/{resultId} {
+    match /results/{resultId} {
+      // PERMISO PÚBLICO: Cualquiera puede leer un resultado si tiene el ID (para la verificación del QR).
+      allow get: if true;
+
       // Un alumno puede crear su propio resultado.
       allow create: if request.auth.uid == request.resource.data.studentUid;
 
-      // Un alumno puede leer sus propios resultados.
-      allow read: if request.auth.uid == resource.data.studentUid;
-      
-      // Un administrador puede leer o eliminar cualquier resultado.
-      allow read, delete: if isAdmin();
+      // Un alumno puede listar sus propios resultados.
+      allow list: if request.auth.uid == request.query.filters.studentUid;
 
-      // Un instructor puede leer o eliminar resultados de su propia empresa.
-      allow read, delete: if isInstructor() && getUserData().company == resource.data.studentCompany;
+      // Un administrador o instructor puede listar resultados.
+      // La lógica de filtrado por empresa para el instructor se hace en la consulta del cliente.
+      allow list: if isAdmin() || isInstructor();
 
-      // Un administrador puede actualizar un resultado (ej. para añadir la nota del simulador).
-      allow update: if isAdmin();
+      // Solo los administradores pueden actualizar o eliminar resultados.
+      allow update, delete: if isAdmin();
     }
 
     // =================================

@@ -10,6 +10,7 @@ import StudentResults from './pages/StudentResults'; // Nueva importación
 import EditProfile from './pages/EditProfile'; // Nueva importación
 import AdminResults from './pages/AdminResults';
 import AdminUsers from './pages/AdminUsers'; // <-- Nueva página
+import VerificationPage from './pages/VerificationPage';
 
 function App() {
   return (
@@ -37,6 +38,10 @@ function App() {
         
         {/* Redirección por defecto */}
         <Route path="*" element={<Navigate to="/" />} />
+
+        {/* --- LA NUEVA RUTA DE VERIFICACIÓN --- */}
+        <Route path="/verify/:resultId" element={<VerificationPage />} />
+
       </Routes>
     </BrowserRouter>
   );

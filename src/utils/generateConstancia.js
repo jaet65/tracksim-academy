@@ -1,9 +1,10 @@
 import jsPDF from 'jspdf';
 import logo from '../assets/Logo.png'; // Importamos el logo
+import QRCode from 'qrcode'; // NUEVO: Para generar el código QR
 import passIcon from '../assets/pass.png'; // NUEVO: Ícono de aprobado
 import crossIcon from '../assets/cross.png'; // NUEVO: Ícono de reprobado
 
-export const generateConstancia = (studentData, examData, score, simulatorScore, incorrectAnswers) => {
+export const generateConstancia = async (studentData, examData, score, simulatorScore, incorrectAnswers, resultId) => {
   const doc = new jsPDF();
   const today = new Date();
   const dateStr = today.toLocaleDateString();
@@ -15,6 +16,22 @@ export const generateConstancia = (studentData, examData, score, simulatorScore,
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.text("Constancia de Participación", 105, 25, { align: "center" });
+
+  // --- CÓDIGO QR DE VERIFICACIÓN (MOVIDO AL ENCABEZADO) ---
+  if (resultId) {
+    try {
+      const verificationUrl = `${window.location.origin}/verify/${resultId}`;
+      const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
+        errorCorrectionLevel: 'H',
+        margin: 2,
+        scale: 4
+      });
+      // Posicionado en la esquina superior derecha
+      doc.addImage(qrCodeDataUrl, 'PNG', 175, 10, 25, 25);
+    } catch (err) {
+      console.error("Error generando el código QR:", err);
+    }
+  }
 
   // --- 2. DATOS GENERALES ---
   doc.setFontSize(12);
@@ -196,7 +213,6 @@ export const generateConstancia = (studentData, examData, score, simulatorScore,
 
   const splitFooter = doc.splitTextToSize(footerText, 180); // Ancho del texto
   doc.text(splitFooter, 105, 285, { align: "center" });
-
 
   // --- 6. GUARDAR PDF ---
   const formattedDate = dateStr.replace(/\//g, '-');

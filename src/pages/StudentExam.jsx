@@ -329,6 +329,12 @@ const StudentExam = () => {
     const user = auth.currentUser; 
 
     const downloadPDF = async () => {
+      // --- NUEVO: Obtenemos el ID del resultado más reciente ---
+      const resultsQuery = query(collection(db, "results"), where("studentUid", "==", user.uid), where("examId", "==", id), orderBy("timestamp", "desc"), limit(1));
+      const resultsSnapshot = await getDocs(resultsQuery);
+      const latestResult = resultsSnapshot.docs[0];
+      const resultId = latestResult?.id;
+
        // Necesitamos leer los datos completos del usuario (CURP, Empresa) de nuevo
        // porque 'auth.currentUser' solo tiene email y nombre básico.
        if(!user) return;
@@ -362,7 +368,7 @@ const StudentExam = () => {
             };
 
             // Llamamos a la nueva función
-            generateConstancia(studentPDFData, examPDFData, score, undefined, incorrectAnswers);
+            generateConstancia(studentPDFData, examPDFData, score, undefined, incorrectAnswers, resultId);
          }
        } catch(e) {
          console.error(e);

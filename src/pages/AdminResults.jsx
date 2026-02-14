@@ -676,7 +676,7 @@ const AdminResults = () => {
                       <td className="p-4 text-right">
                         <div className="flex justify-end items-center gap-2">
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               const studentPDFData = { 
                                 studentName: r.studentName,
                                 studentEmail: r.studentEmail || 'No disponible',
@@ -694,7 +694,7 @@ const AdminResults = () => {
                                   isCorrect: r.studentAnswers[index] === q.correctOption
                                 }))
                                 .filter(item => !item.isCorrect);
-                              generateConstancia(studentPDFData, examPDFData, r.score, r.simulatorScore, incorrectAnswers);
+                              await generateConstancia(studentPDFData, examPDFData, r.score, r.simulatorScore, incorrectAnswers, r.id);
                             }}
                             className="text-gray-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-100 transition"
                             title="Descargar Constancia de Participación"
