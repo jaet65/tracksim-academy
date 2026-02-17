@@ -599,14 +599,27 @@ const StudentExam = () => {
 
       {/* Header con Timer */}
       <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3 w-2/3">
-            <img src={logo} alt="Logo" className="h-8" />
-            <h1 className="font-bold text-gray-700 truncate">{exam.title}</h1>
+        {/* CAMBIO 1: Usamos max-w-7xl para que se expanda hacia las esquinas */}
+        <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <img src={logo} alt="Logo" className="h-8 flex-shrink-0" />
+            <h1 className="font-bold text-gray-700 truncate text-sm sm:text-base">{exam.title}</h1>
           </div>
-          <div className={`flex items-center gap-2 font-mono text-xl font-bold ${timeLeft < 60 ? 'text-red-600 animate-pulse' : 'text-blue-600'}`}>
-            <Clock size={20} />
-            {formatTime(timeLeft)}
+          
+          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+            {/* CAMBIO 2: El Timer va primero */}
+            <div className={`flex items-center gap-1.5 font-mono text-lg sm:text-xl font-bold ${timeLeft < 60 ? 'text-red-600 animate-pulse' : 'text-blue-600'}`}>
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
+              {formatTime(timeLeft)}
+            </div>
+
+            {/* CAMBIO 3: El Botón va al final (derecha) */}
+            <button
+              onClick={() => setShowConfirmFinishModal(true)}
+              className="bg-red-600 text-white hover:bg-red-700 font-bold text-xs sm:text-sm px-4 py-2 rounded-lg transition-colors shadow-md whitespace-nowrap"
+            >
+              Abandonar
+            </button>
           </div>
         </div>
         {/* Barra de progreso */}
