@@ -666,7 +666,7 @@ const StudentExam = () => {
             <button
               disabled={currentQuestionIndex === 0}
               onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
-              className="flex items-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed px-4 py-2"
+              className="bg-red-600 text-white hover:bg-red-700 transition-colors disabled:cursor-not-allowed disabled:opacity-10 px-4 py-2 rounded-lg flex items-center"
             >
               <ChevronLeft size={20} className="mr-1" /> Anterior
             </button>
@@ -683,9 +683,15 @@ const StudentExam = () => {
             ) : (
               <button
                 onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 shadow-md transition-colors flex items-center"
+                className={`${
+                  answers[currentQuestionIndex] !== undefined 
+                    ? 'bg-green-600 hover:bg-green-700' // Estilo para Siguiente (Verde)
+                    : 'bg-gray-500 hover:bg-gray-600' // Estilo para Omitir (Gris)
+                } text-white px-6 py-2 rounded-lg shadow-md transition-colors flex items-center`}
               >
-                Siguiente <ChevronRight size={20} className="ml-1" />
+                {/* Cambia el texto dinámicamente */}
+                {answers[currentQuestionIndex] !== undefined ? "Siguiente" : "Omitir"} 
+                <ChevronRight size={20} className="ml-1" />
               </button>
             )}
           </div>
