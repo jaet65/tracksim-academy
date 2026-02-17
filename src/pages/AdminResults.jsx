@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
 import { collection, getDocs, orderBy, query, doc, getDoc, deleteDoc, addDoc, writeBatch, where, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat, Upload, Loader, Users } from 'lucide-react';
+import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat, Upload, Loader, Users, RefreshCcw } from 'lucide-react';
 import { formatTime } from '../utils/timeUtils'; // Import utility formatTime
 import { generateDC3 } from '../utils/generateDC3'; // Para el formato oficial
 import { generateConstancia } from '../utils/generateConstancia'; // Para la constancia con errores
@@ -490,17 +490,31 @@ const AdminResults = () => {
 
       <main className="max-w-7xl mx-auto mt-8 p-4">
         
-        {/* Barra de Herramientas */}
+       {/* Barra de Herramientas ACTUALIZADA */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-lg shadow-sm mb-6 gap-4">
-          <div className="relative w-full md:w-96">
-            <Search className="absolute top-3 left-3 text-gray-400 w-5 h-5" />
-            <input 
-              type="text" 
-              placeholder="Buscar por alumno, empresa o examen..." 
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          
+          {/* Grupo: Búsqueda y Botón de Recarga */}
+          <div className="flex w-full md:w-auto gap-2 items-center">
+            <div className="relative w-full md:w-96">
+              <Search className="absolute top-3 left-3 text-gray-400 w-5 h-5" />
+              <input 
+                type="text" 
+                placeholder="Buscar por alumno, empresa o examen..." 
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            {/* 2. BOTÓN DE RECARGA */}
+            <button 
+              onClick={fetchAllData} 
+              className="p-2.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors border border-gray-200"
+              title="Actualizar lista de resultados"
+              disabled={loading}
+            >
+              <RefreshCcw size={20} className={loading ? "animate-spin" : ""} />
+            </button>
           </div>
           
           {/* --- NUEVO: Botones de acciones en lote (solo para admins) --- */}
