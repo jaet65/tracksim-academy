@@ -57,7 +57,7 @@ service cloud.firestore {
       allow create: if request.auth.uid == request.resource.data.studentUid;
 
       // Un alumno puede listar sus propios resultados.
-      allow list: if request.auth.uid == request.query.filters.studentUid;
+      allow list: if request.auth.uid == resource.data.studentUid;
 
       // Un administrador o instructor puede listar resultados.
       // La lógica de filtrado por empresa para el instructor se hace en la consulta del cliente.

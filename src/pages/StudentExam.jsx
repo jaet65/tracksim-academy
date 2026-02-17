@@ -177,7 +177,7 @@ const StudentExam = () => {
   }, [timeLeft, finished, onBreak]);
   // --- NUEVO: Lógica para activar los descansos ---
   useEffect(() => {
-    if (loading || !exam || finished || onBreak) return;
+    if (loading || !exam || finished || onBreak || !rulesAccepted) return;
 
     // Condición 1: Descanso por número de preguntas
     const questionBreakThreshold = (breaksTaken.questions + 1) * BREAK_INTERVAL_QUESTIONS;
@@ -201,7 +201,7 @@ const StudentExam = () => {
       console.log(`Activando descanso por tiempo. Tiempo transcurrido: ${formatTimeUtil(timeElapsed)}`);
       console.log(`Tiempo restante: ${formatTimeUtil(timeLeft)}`);
     }
-  }, [currentQuestionIndex, timeLeft, loading, exam, finished, onBreak, breaksTaken, initialTimeInSeconds]);
+  }, [currentQuestionIndex, timeLeft, loading, exam, finished, onBreak, breaksTaken, initialTimeInSeconds, rulesAccepted]);
 
   // --- NUEVO: Lógica para el temporizador del descanso (movida aquí) ---
   useEffect(() => {
