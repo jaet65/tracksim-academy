@@ -68,7 +68,7 @@ const ExamRules = ({ examDurationInSeconds, onAccept, onCancel, onShowGuide, sup
               <Coffee className="w-7 h-7 text-green-500 mt-1 flex-shrink-0" />
               <div>
                 <h3 className="font-bold text-lg">Descansos</h3>
-                <p className="text-gray-500">Tendrás un descanso de <strong>5 minutos</strong> cada 60 preguntas o 30 minutos para que puedas relajarte. Descuida el tiempo se pausará durante el descanso.</p>
+                <p className="text-gray-500">Tendrás un descanso de <strong>5 minutos</strong> cada 66 preguntas o 30 minutos para que puedas relajarte. Descuida el tiempo se pausará durante el descanso.</p>
               </div>
             </li>
             <li className="flex items-start gap-4">
