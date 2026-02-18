@@ -71,12 +71,15 @@ const BreakScreen = ({ breakTimeLeft, durationInSeconds, onBreakFinish, videoSrc
       {/* --- NUEVO: Video circular posicionado absolutamente a la izquierda --- */}
       {/* --- MODIFICADO: El video solo se muestra si es el primer descanso --- */}
       {isFirstBreak && videoMounted && (
-        <div className={`absolute bottom-8 right-8 w-72 h-72 rounded-full overflow-hidden shadow-2xl hidden lg:block transition-opacity duration-1000 z-20`} style={{ opacity: videoOpacity }}>
+        <div 
+          className={`absolute bottom-4 right-4 lg:bottom-8 lg:right-8 w-32 h-32 sm:w-48 sm:h-48 lg:w-72 lg:h-72 rounded-full overflow-hidden shadow-2xl block transition-opacity duration-1000 z-20`} 
+          style={{ opacity: videoOpacity }}
+        >
           <video
             src={videoSrc}
             autoPlay
             playsInline
-            onEnded={handleVideoEnd} // Se oculta al terminar
+            onEnded={handleVideoEnd}
             className="w-full h-full object-cover"
           />
         </div>
