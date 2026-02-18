@@ -115,39 +115,40 @@ const CompleteProfile = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
-        <div className="flex justify-center mb-6">
-          <img src={logo} alt="Logo" className="h-12" />
-        </div>
-        <div className="text-center mb-8">
+        
+        <div className="text-center mb-5">
           <h1 className="text-2xl font-bold text-gray-800">Completa tu Perfil</h1>
           <p className="text-gray-500 mt-2 text-sm">
             Necesitamos estos datos para generar tus constancias DC-3.
           </p>
+          <p className="text-red-500 mt-2 text-xs">
+            *Campos Obligatorios.
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-2">
           {/* Nombre(s) */}
           <div className="relative">
             <User className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
-            <input type="text" name="firstName" placeholder="Nombre(s)" value={formData.firstName} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            <input type="text" name="firstName" placeholder="*Nombre(s)" value={formData.firstName} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
 
           {/* Apellido Paterno */}
           <div className="relative">
             <User className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
-            <input type="text" name="paternalLastName" placeholder="Apellido Paterno" value={formData.paternalLastName} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            <input type="text" name="paternalLastName" placeholder="*Apellido Paterno" value={formData.paternalLastName} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
 
           {/* Apellido Materno */}
           <div className="relative">
             <User className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
-            <input type="text" name="maternalLastName" placeholder="Apellido Materno" value={formData.maternalLastName} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            <input type="text" name="maternalLastName" placeholder="*Apellido Materno" value={formData.maternalLastName} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
 
           {/* CURP */}
           <div className="relative">
             <Fingerprint className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
-            <input type="text" name="curp" placeholder="CURP" value={formData.curp} onChange={handleChange} required maxLength="18" className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 outline-none ${fieldErrors.curp ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`} />
+            <input type="text" name="curp" placeholder="*CURP" value={formData.curp} onChange={handleChange} required maxLength="18" className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 outline-none ${fieldErrors.curp ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`} />
           </div>
           {fieldErrors.curp && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.curp}</p>}
 
@@ -159,13 +160,13 @@ const CompleteProfile = () => {
           {/* Empresa */}
           <div className="relative">
             <Building className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
-            <input type="text" name="company" placeholder="Nombre de la Empresa" value={formData.company} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            <input type="text" name="company" placeholder="*Nombre de la Empresa" value={formData.company} onChange={handleChange} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
           
           {/* RFC de la Empresa (NUEVO) */}
           <div className="relative">
             <Hash className="absolute top-3.5 left-3 text-gray-400 w-5 h-5" />
-            <input type="text" name="companyRfc" placeholder="RFC de la Empresa" value={formData.companyRfc} onChange={handleChange} required maxLength="13" className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 outline-none ${fieldErrors.companyRfc ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`} />
+            <input type="text" name="companyRfc" placeholder="RFC de la Empresa (Opcional)" value={formData.companyRfc} onChange={handleChange} maxLength="13" className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 outline-none ${fieldErrors.companyRfc ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`} />
           </div>
           {fieldErrors.companyRfc && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.companyRfc}</p>}
 
