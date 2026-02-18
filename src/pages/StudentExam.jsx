@@ -7,6 +7,7 @@ import logo from '../assets/Logo.png'; // Importamos el logo
 import { generateConstancia } from '../utils/generateConstancia';
 import Confetti from 'react-confetti'; // <-- NUEVO: Importamos el confeti
 import { signOut } from 'firebase/auth'; // Importamos signOut
+import NoSleep from 'nosleep.js'; // <-- NUEVO: Importamos NoSleep.js
 
 // --- NUEVO: Importación de Hooks Personalizados ---
 import { useExamData } from '../hooks/useExamData';
@@ -54,6 +55,20 @@ const StudentExam = () => {
   const [showTimeWarning, setShowTimeWarning] = useState(false);
   // --- NUEVO: Estado para la notificación de fin de tiempo ---
   const [showTimeUpNotification, setShowTimeUpNotification] = useState(false);
+  // --- NUEVO: Referencia para el bloqueo de pantalla ---
+  const noSleepRef = useRef(null);  
+
+  // Inicializar NoSleep una sola vez
+  useEffect(() => {
+    noSleepRef.current = new NoSleep();
+    
+    // Limpieza al salir
+    return () => {
+      if (noSleepRef.current) {
+        noSleepRef.current.disable();
+      }
+    };
+  }, []);
 
   // --- Uso de Hooks Personalizados ---
   const { exam, loading } = useExamData(id);
@@ -240,9 +255,19 @@ const StudentExam = () => {
     setShowStudyGuide(true);
   };
 
-
   const handleAcceptRulesAndFullscreen = () => {
     requestFullscreen();
+
+    // Activar el bloqueo de suspensión
+    // IMPORTANTE: Esto debe suceder dentro de este evento de clic
+    if (noSleepRef.current) {
+      noSleepRef.current.enable().then(() => {
+        console.log("NoSleep activado: La pantalla no se apagará.");
+      }).catch(err => {
+        console.warn("No se pudo activar NoSleep:", err);
+      });
+    }
+
     setRulesAccepted(true);
   };
 
@@ -325,6 +350,12 @@ const StudentExam = () => {
       // O mejor aún, hagámoslo bien:
     };
     
+    useEffect(() => {
+      if (finished && noSleepRef.current) {
+        noSleepRef.current.disable();
+        console.log("Examen terminado: NoSleep desactivado.");
+      }
+    }, [finished]);
     // MEJOR OPCIÓN: Leer los datos del usuario logueado para generar el PDF aquí mismo
     const user = auth.currentUser; 
 
