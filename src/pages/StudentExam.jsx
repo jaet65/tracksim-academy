@@ -461,10 +461,10 @@ const StudentExam = () => {
       <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <img src={logo} alt="Logo" className="h-8 flex-shrink-0" />
+            <img src={logo} alt="Logo" className="h-8 shrink-0" />
             <h1 className="font-bold text-gray-700 truncate text-sm sm:text-base">{exam.title}</h1>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             <div className={`flex items-center gap-1.5 font-mono text-lg sm:text-xl font-bold ${timeLeft < 60 ? 'text-red-600 animate-pulse' : 'text-blue-600'}`}>
               <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
               {formatTime(timeLeft)}
@@ -478,7 +478,7 @@ const StudentExam = () => {
       </header>
 
       <main className="flex-1 max-w-3xl w-full mx-auto p-6">
-        <div className="bg-white rounded-xl shadow-sm p-6 sm:p-10 min-h-[400px] flex flex-col justify-between">
+        <div className="bg-white rounded-xl shadow-sm p-6 sm:p-10 min-h-100 flex flex-col justify-between">
           <div>
             <span className="text-sm font-bold text-gray-400 uppercase tracking-wide">Pregunta {currentQuestionIndex + 1} de {exam.questions.length}</span>
             <h2 className="text-xl sm:text-2xl font-medium text-gray-800 mt-4 mb-8">{question.text}</h2>
@@ -486,7 +486,7 @@ const StudentExam = () => {
               {question.type === 'TF' ? (
                 <div className="flex gap-4">
                   {question.shuffledOptions.map((shuffledOpt, idx) => (
-                    <button key={`${question.id}-${idx}`} onClick={() => handleSelectOption(idx)} className={`flex-1 text-center p-4 rounded-lg border-2 transition-all font-bold text-lg ${answers[currentQuestionIndex] === question.originalIndexMap[idx] ? (shuffledOpt === 'Verdadero' ? 'border-green-500 bg-green-50 text-green-700' : 'border-red-500 bg-red-50 text-red-700') : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50'}`}>{shuffledOpt}</button>
+                    <button key={`${question.id}-${idx}`} onClick={() => handleSelectOption(idx)} className={`flex-1 text-center p-4 rounded-lg border-2 transition-all font-bold text-lg ${answers[currentQuestionIndex] === question.originalIndexMap[idx] ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50'}`}>{shuffledOpt}</button>
                   ))}
                 </div>
               ) : (
