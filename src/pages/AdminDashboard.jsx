@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';
-import { collection, addDoc, getDocs, doc, getDoc, deleteDoc, orderBy, query, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, deleteDoc, orderBy, query, where, updateDoc, onSnapshot } from 'firebase/firestore';
+
+
 import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
 import Papa from 'papaparse';
 import { LogOut, Upload, FileText, CheckCircle, Type, List, Trash2, BookCopy, Loader, Users, AlertTriangle, Download, Paperclip, Link2, FileX } from 'lucide-react';
@@ -43,6 +45,101 @@ const AdminDashboard = () => {
   const [isDeletingGuide, setIsDeletingGuide] = useState(null); // Para el loader de borrado de guía
   const chartRef = useRef(null);
   const navigate = useNavigate();
+
+  const [instructorRequests, setInstructorRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+
+  // Real-time listener for instructor requests (fetch all and filter pending client‑side)
+  useEffect(() => {
+    setLoadingRequests(true);
+    const q = collection(db, 'instructor_requests'); // fetch all
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const allReqs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        // Filter pending requests client‑side
+        const pending = allReqs.filter((r) => r.status === 'pending');
+        console.log('Pending instructor requests count:', pending.length);
+        // Sort by createdAt descending
+        pending.sort((a, b) => {
+          const ta = a.createdAt?.seconds ?? 0;
+          const tb = b.createdAt?.seconds ?? 0;
+          return tb - ta;
+        });
+        // Keep only the latest request per user
+        const latestByUser = [];
+        const seen = new Set();
+        for (const req of pending) {
+          if (!seen.has(req.uid)) {
+            seen.add(req.uid);
+            latestByUser.push(req);
+          }
+        }
+        const displayed = latestByUser.length > 5 ? [latestByUser[0]] : latestByUser;
+        setInstructorRequests(displayed);
+        setLoadingRequests(false);
+      },
+      (error) => {
+        console.error('Error fetching instructor requests:', error);
+        setLoadingRequests(false);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleApproveRequest = async (request) => {
+    try {
+      await updateDoc(doc(db, 'users', request.uid), { isInstructor: true });
+      await updateDoc(doc(db, 'instructor_requests', request.id), { status: 'approved' });
+      // Delete any other pending requests from the same user
+      const otherQ = query(
+        collection(db, 'instructor_requests'),
+        where('uid', '==', request.uid),
+        where('status', '==', 'pending')
+      );
+      const otherSnap = await getDocs(otherQ);
+      const deletePromises = otherSnap.docs
+        .filter(d => d.id !== request.id)
+        .map(d => deleteDoc(doc(db, 'instructor_requests', d.id)));
+      await Promise.all(deletePromises);
+await updateDoc(doc(db, 'users', request.uid), { instructorRequestStatus: 'approved', instructorRequestUpdatedAt: new Date(), redirectAfterApproval: '/admin/resultados' });
+    // Recargar la página para que el nuevo rol de instructor se refleje en la UI
+    window.location.reload();
+
+    } catch (err) {
+      console.error('Error approving instructor request:', err);
+    }
+  };
+
+  const handleRejectRequest = async (request) => {
+    try {
+      // Mark the request as rejected
+      await updateDoc(doc(db, 'instructor_requests', request.id), { status: 'rejected' });
+      // Update user document to reflect rejection (could be read by client UI)
+      await updateDoc(doc(db, 'users', request.uid), { instructorRequestStatus: 'rejected', instructorRequestUpdatedAt: new Date() });
+      // Add a notification for the student
+      await addDoc(collection(db, 'notifications'), {
+        uid: request.uid,
+        type: 'instructor_request_rejected',
+        message: 'Tu solicitud para ser instructor ha sido rechazada.',
+        createdAt: new Date(),
+        read: false
+      });
+      // Delete any other pending requests from the same user
+      const otherQ = query(
+        collection(db, 'instructor_requests'),
+        where('uid', '==', request.uid),
+        where('status', '==', 'pending')
+      );
+      const otherSnap = await getDocs(otherQ);
+      const deletePromises = otherSnap.docs
+        .filter(d => d.id !== request.id)
+        .map(d => deleteDoc(doc(db, 'instructor_requests', d.id)));
+      await Promise.all(deletePromises);
+    } catch (err) {
+      console.error('Error rejecting instructor request:', err);
+    }
+  };
 
   const fetchExams = async () => {
     setLoadingExams(true);
@@ -115,6 +212,7 @@ const AdminDashboard = () => {
 
     fetchInitialData();
   }, []);
+
 
   // This effect updates the chart whenever filters change
   useEffect(() => {
@@ -495,6 +593,36 @@ const AdminDashboard = () => {
 
       {/* Contenido Principal */}
       <main className="max-w-4xl mx-auto p-3">
+        {/* Solicitudes de Instructor */}
+        <div className="bg-white rounded-xl shadow-md p-8 mt-10 border-t-4 border-yellow-500">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+            <AlertTriangle className="text-yellow-500" /> Solicitudes de Instructor
+          </h2>
+          {loadingRequests ? (
+            <div className="flex items-center">
+              <Loader className="animate-spin text-yellow-600 mr-2" />
+              <span>Cargando solicitudes...</span>
+            </div>
+          ) : instructorRequests.length === 0 ? (
+            <p className="text-gray-500">No hay solicitudes pendientes.</p>
+          ) : (
+            <ul className="space-y-2">
+              {instructorRequests.map(req => (
+                                <li key={req.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                  <span>{req.email || req.uid}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleApproveRequest(req)} className="text-green-600 hover:text-green-800 font-medium">
+                      Aprobar
+                    </button>
+                    <button onClick={() => handleRejectRequest(req)} className="text-red-600 hover:text-red-800 font-medium">
+                      Rechazar
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <div className="bg-white rounded-xl shadow-md p-8 text-center border-t-4 border-blue-600">
           
           <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">

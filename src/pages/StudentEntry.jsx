@@ -1,51 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
-import { doc, getDoc, collection, getDocs, query, where, limit, deleteDoc } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User, ShieldAlert, Award } from 'lucide-react';
+import { doc, getDoc, collection, getDocs, query, where, limit, deleteDoc, addDoc, serverTimestamp, updateDoc, onSnapshot, deleteField } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User, ShieldAlert, Award } from 'lucide-react';
 import logo from '../assets/Logo.gif'; // Importamos el logo
 
 const StudentEntry = () => {
+  const navigate = useNavigate();
   const [selectedExamId, setSelectedExamId] = useState('');
   const [examStatus, setExamStatus] = useState({ blocked: false, message: '' });
   const [availableExams, setAvailableExams] = useState([]); // Lista de exámenes
   const [userData, setUserData] = useState(null);
+  const [requestMessage, setRequestMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  
-  const navigate = useNavigate();
+
+  const handleRequestInstructor = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      setRequestMessage('Debes iniciar sesión para solicitar ser instructor.');
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'instructor_requests'), {
+        uid: user.uid,
+        email: user.email,
+        fullName: userData?.fullName || '',
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      setRequestMessage('Solicitud enviada. Un administrador revisará tu petición.');
+    } catch (err) {
+      console.error('Error al solicitar instructor:', err);
+      setRequestMessage('Error al enviar la solicitud. Inténtalo de nuevo.');
+    }
+  };
+  const initData = async (user) => {
+    try {
+      // 1. Cargar Datos del Alumno
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setUserData(data);
+        if (data.redirectAfterApproval) {
+          // Navigate to the target page and then clear the redirect field
+          navigate(data.redirectAfterApproval);
+          // Clear the redirect flag in the user document
+          await updateDoc(doc(db, "users", user.uid), { redirectAfterApproval: deleteField() });
+        }
+      } else {
+        navigate('/completar-perfil');
+        return;
+      }
+
+      // 2. Cargar Lista de Exámenes (NUEVO)
+      const examsCollection = collection(db, "exams");
+      const examsSnapshot = await getDocs(examsCollection);
+
+      const examsList = examsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        title: doc.data().title || "Examen sin título",
+        totalQuestions: doc.data().totalQuestions || 0,
+        duration: doc.data().duration || 45 // <-- Agregamos la duración
+      }));
+
+      setAvailableExams(examsList);
+    } catch (error) {
+      console.error("Error cargando datos:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const initData = async (user) => {
-      try {
-        // 1. Cargar Datos del Alumno
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          setUserData(userDoc.data());
-        } else {
-          navigate('/completar-perfil');
-          return;
-        }
-
-        // 2. Cargar Lista de Exámenes (NUEVO)
-        const examsCollection = collection(db, "exams");
-        const examsSnapshot = await getDocs(examsCollection);
-        
-        const examsList = examsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          title: doc.data().title || "Examen sin título",
-          totalQuestions: doc.data().totalQuestions || 0,
-          duration: doc.data().duration || 45 // <-- Agregamos la duración
-        }));
-
-        setAvailableExams(examsList);
-
-      } catch (error) {
-        console.error("Error cargando datos:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) {
         navigate('/home');
@@ -53,7 +80,6 @@ const StudentEntry = () => {
         initData(user);
       }
     });
-
     return () => unsubscribe();
   }, [navigate]);
 
@@ -80,8 +106,8 @@ const StudentEntry = () => {
       // 2. Si hay resultado, verificar si hay una aprobación de retoma (si existe el documento, está pendiente)
       const approvalsRef = collection(db, "retake_approvals");
       const qApprovals = query(
-        approvalsRef, 
-        where("studentUid", "==", studentUid), 
+        approvalsRef,
+        where("studentUid", "==", studentUid),
         where("examId", "==", selectedExamId)
       );
       const approvalsSnap = await getDocs(qApprovals);
@@ -145,7 +171,7 @@ const StudentEntry = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
-        
+
         {/* Header con Bienvenida */}
         <div className="flex justify-center mb-6">
           <img src={logo} alt="Logo de la Academia" className="h-30" />
@@ -160,7 +186,7 @@ const StudentEntry = () => {
         </div>
 
         <form onSubmit={handleStartExam} className="space-y-6">
-          
+
           {/* Selector de Exámenes */}
           <div className="relative">
             <label className="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">
@@ -169,14 +195,14 @@ const StudentEntry = () => {
             <div className="relative">
               <BookOpen className="absolute top-3.5 left-3 text-gray-400 w-5 h-5 pointer-events-none" />
               <ChevronDown className="absolute top-3.5 right-3 text-gray-400 w-5 h-5 pointer-events-none" />
-              
+
               <select
                 value={selectedExamId}
                 onChange={(e) => setSelectedExamId(e.target.value)}
                 className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-gray-700 cursor-pointer hover:border-blue-400 transition"
               >
                 <option value="" disabled>-- Selecciona un examen --</option>
-                
+
                 {availableExams.length > 0 ? (
                   availableExams.map((exam) => (
                     <option key={exam.id} value={exam.id}>
@@ -208,36 +234,53 @@ const StudentEntry = () => {
             type="submit"
             disabled={!selectedExamId || examStatus.blocked} // Se deshabilita si no hay selección o está bloqueado
             className={`w-full font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all ${ // ...
-              selectedExamId 
-                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' 
+              selectedExamId
+                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
+              }`}
           >
             Comenzar Evaluación <ArrowRight size={20} />
           </button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-gray-100">
-          <div className="flex items-center justify-center space-x-4">
-            <button 
-              onClick={() => navigate('/editar-perfil')}
-              className="text-sm text-gray-400 hover:text-blue-500 flex items-center justify-center gap-2 transition-colors"
-            >
-              <User size={16} /> Editar Perfil
-            </button>
-            <button 
-              onClick={() => navigate('/portal/mis-resultados')}
-              className="text-sm text-gray-400 hover:text-blue-500 flex items-center justify-center gap-2 transition-colors"
-            >
-              <Award size={16} /> Mis Resultados
-            </button>
+          <div className="flex flex-col items-center justify-center space-y-4">
+            <div className="flex items-center justify-center space-x-4">
+              <button
+                onClick={() => navigate('/editar-perfil')}
+                className="text-sm text-gray-400 hover:text-blue-500 flex items-center justify-center gap-2 transition-colors"
+              >
+                <User size={16} /> Editar Perfil
+              </button>
+              <button
+                onClick={() => navigate('/portal/mis-resultados')}
+                className="text-sm text-gray-400 hover:text-blue-500 flex items-center justify-center gap-2 transition-colors"
+              >
+                <Award size={16} /> Mis Resultados
+              </button>
 
-            <button 
-              onClick={() => auth.signOut()}
-              className="text-sm text-gray-400 hover:text-red-500 flex items-center justify-center gap-2 transition-colors"
+              <button
+                onClick={() => auth.signOut()}
+                className="text-sm text-gray-400 hover:text-red-500 flex items-center justify-center gap-2 transition-colors"
+              >
+                <LogOut size={16} /> Cerrar Sesión
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={userData?.instructorRequestStatus === 'rejected' ? undefined : handleRequestInstructor}
+              disabled={userData?.instructorRequestStatus === 'rejected'}
+              className={`mt-2 w-full font-medium py-2 rounded-lg flex items-center justify-center gap-2 transition-all ${userData?.instructorRequestStatus === 'rejected' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white shadow-lg disabled:bg-gray-300`}
             >
-              <LogOut size={16} /> Cerrar Sesión
+              Solicitar ser Instructor
             </button>
+            {userData?.instructorRequestStatus === 'rejected' ? (
+              <p className="text-center mt-2 text-sm text-red-500">Tu solicitud fue rechazada previamente, consulta con un administrador</p>
+            ) : (
+              requestMessage && (
+                <p className={`text-center mt-2 text-sm ${requestMessage.includes('Error') ? 'text-red-500' : 'text-green-500'}`}>{requestMessage}</p>
+              )
+            )}
           </div>
         </div>
       </div>

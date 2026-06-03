@@ -80,5 +80,27 @@ service cloud.firestore {
       // Un alumno necesita poder ELIMINAR su propio pase para "consumirlo" antes de empezar el examen.
       allow delete: if request.auth.uid == resource.data.studentUid;
     }
+    // =================================
+    // Colección: notifications
+    // =================================
+    match /notifications/{notifId} {
+      // Admin can create notifications for any user
+      allow create: if isAdmin();
+      // Users can read their own notifications
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      // Admin can read all notifications
+      allow read: if isAdmin();
+      // Admin can delete notifications if needed
+      allow delete: if isAdmin();
+    }
+    // =================================
+    // Colección: instructor_requests
+    // =================================
+    match /instructor_requests/{reqId} {
+      // Un usuario autenticado puede crear su propia solicitud de instructor.
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      // Solo administradores pueden leer, actualizar o eliminar solicitudes.
+      allow read, update, delete: if isAdmin();
+    }
   }
 }
