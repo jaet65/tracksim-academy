@@ -741,7 +741,7 @@ await updateDoc(doc(db, 'users', request.uid), { instructorRequestStatus: 'appro
           ) : (
             <ul className="space-y-3">
               {exams.map(exam => (
-                <li key={exam.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                <li key={exam.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200 transition-colors">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -755,44 +755,71 @@ await updateDoc(doc(db, 'users', request.uid), { instructorRequestStatus: 'appro
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {editingExamId === exam.id ? (
-                        <>
-                          <input
-                            type="number"
-                            value={exam.duration || 45}
-                            onChange={(e) => setExams(exams.map(ex => ex.id === exam.id ? { ...ex, duration: e.target.value } : ex))}
-                            className="w-20 text-center border-gray-300 rounded-md"
-                          />
-                          <button onClick={() => handleSaveExamChanges(exam.id)} className="text-green-600 p-2 rounded-full hover:bg-green-100">Guardar</button>
-                          <button onClick={() => setEditingExamId(null)} className="text-gray-500 p-2 rounded-full hover:bg-gray-200">X</button>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-sm font-medium text-gray-600 bg-gray-200 px-2 py-1 rounded-md">{exam.duration || 'N/A'} min</span>
-                          <button onClick={() => setEditingExamId(exam.id)} className="text-blue-600 p-2 rounded-full hover:bg-blue-100">Editar</button>
-                          <button
-                            onClick={() => handleUpdateGuideLink(exam)}
-                            className="text-teal-500 hover:text-teal-700 p-2 rounded-full hover:bg-teal-100 transition-colors"
-                            title="Subir o reemplazar guía complementaria"
-                          ><Upload size={20} /></button>
-                          {exam.supplementaryGuideUrl && (
-                            <button onClick={() => handleDeleteGuideLink(exam)} disabled={isDeletingGuide === exam.id} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-wait" title="Eliminar guía complementaria">
-                              {isDeletingGuide === exam.id ? (
-                                <Loader size={20} className="animate-spin" />
-                              ) : (
-                                <FileX size={20} />
-                              )}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteExam(exam)}
-                            className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors"
-                            title="Eliminar examen"
-                          ><Trash2 size={20} /></button>
-                        </>
-                      )}
+                      <span className="text-sm font-medium text-gray-600 bg-gray-200 px-2 py-1 rounded-md">{exam.duration || 'N/A'} min</span>
+                      <button 
+                        onClick={() => setEditingExamId(editingExamId === exam.id ? null : exam.id)} 
+                        className="text-blue-600 p-2 rounded-full hover:bg-blue-100"
+                      >
+                        {editingExamId === exam.id ? 'Cerrar' : 'Editar'}
+                      </button>
                     </div>
                   </div>
+
+                  {/* --- FORMULARIO DE EDICIÓN (COLAPSABLE) --- */}
+                  {editingExamId === exam.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
+                      
+                      {/* 1. Ajuste de tiempo */}
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-medium text-gray-700">Duración:</label>
+                        <input
+                          type="number"
+                          value={exam.duration || 45}
+                          onChange={(e) => setExams(exams.map(ex => ex.id === exam.id ? { ...ex, duration: e.target.value } : ex))}
+                          className="w-24 text-center border-gray-300 rounded-md shadow-sm"
+                        />
+                        <button onClick={() => handleSaveExamChanges(exam.id)} className="text-sm font-medium text-green-600 hover:text-green-800">Guardar Tiempo</button>
+                      </div>
+
+                      {/* 2. Guías de estudio */}
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-medium text-gray-700">Guía:</label>
+                        <button
+                          onClick={() => handleUpdateGuideLink(exam)}
+                          className="flex items-center gap-2 text-sm text-teal-600 hover:text-teal-800"
+                          title="Subir o reemplazar guía"
+                        >
+                          <Upload size={16} /> {exam.supplementaryGuideUrl ? 'Reemplazar' : 'Subir'}
+                        </button>
+                        
+                        {exam.supplementaryGuideUrl && (
+                          <button 
+                            onClick={() => handleDeleteGuideLink(exam)} 
+                            disabled={isDeletingGuide === exam.id} 
+                            className="flex items-center gap-2 text-sm text-red-600 hover:text-red-800 disabled:opacity-50" 
+                            title="Eliminar guía"
+                          >
+                            {isDeletingGuide === exam.id 
+                              ? <Loader size={16} className="animate-spin" /> 
+                              : <FileX size={16} />}
+                            Eliminar Guía
+                          </button>
+                        )}
+                      </div>
+
+                      {/* 3. Eliminar examen */}
+                      <div className="pt-4 border-t border-gray-200">
+                        <button
+                          onClick={() => handleDeleteExam(exam)}
+                          className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg"
+                          title="Eliminar examen permanentemente"
+                        >
+                          <Trash2 size={16} /> Eliminar Examen Permanentemente
+                        </button>
+                      </div>
+
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
