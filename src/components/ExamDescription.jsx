@@ -92,13 +92,18 @@ const ExamDescription = ({ exam, onAccept, onCancel, onShowGuide }) => {
   
   useEffect(() => {
     if (exam) {
-      // 1. Prioridad: Usar la descripción pre-generada si existe en la BD.
-      if (exam.descriptionTitle && exam.descriptionBody) {
+      // 1. Prioridad: Usar la descripción del XLSX si existe.
+      if (exam.description) {
+        setSummary({
+          title: "Descripción de la Evaluación", // Título genérico
+          description: exam.description
+        });
+      } else if (exam.descriptionTitle && exam.descriptionBody) { // 2. Compatibilidad con el formato anterior
         setSummary({
           title: exam.descriptionTitle,
           description: exam.descriptionBody
         });
-      } else if (exam.questions) { // 2. Fallback: Generarla si no existe.
+      } else if (exam.questions) { // 3. Fallback: Generarla si no existe nada.
         const [title, description] = generateExamSummary(exam.questions);
         setSummary({ title, description });
       }
@@ -111,7 +116,14 @@ const ExamDescription = ({ exam, onAccept, onCancel, onShowGuide }) => {
         <BookText className="w-16 h-16 text-blue-500 mx-auto mb-6" />
         <h1 className="text-3xl font-bold text-gray-800 mb-2">Descripción de la Evaluación</h1>
         <h2 className="text-xl font-semibold text-gray-700 mb-8">{exam?.title || "Cargando..."}</h2>
-        <p className="text-gray-600 mb-10 text-lg leading-relaxed bg-gray-50 p-4 rounded-lg">{summary.description}</p>
+        <p className="text-gray-600 mb-10 text-lg leading-relaxed bg-gray-50 p-4 rounded-lg text-justify">
+          {summary.description.split('\n').map((line, index) => (
+            <React.Fragment key={index}>
+              {line}
+              {index < summary.description.split('\n').length - 1 && <br />}
+            </React.Fragment>
+          ))}
+        </p>
         <button 
           onClick={onAccept} 
           disabled={isButtonDisabled}

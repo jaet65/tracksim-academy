@@ -1,8 +1,40 @@
 import React from 'react';
-import { FileText, Star, Lightbulb, Paperclip, BrainCircuit, BookText, Download, X } from 'lucide-react';
+import { FileText, Star, Lightbulb, Paperclip, BrainCircuit, BookText, Download, X, ListChecks } from 'lucide-react';
 import jsPDF from 'jspdf';
 import logo from '../assets/Logo.gif';
 import 'jspdf-autotable';
+
+const Paragraph = ({ icon, title, content }) => (
+  <div className="mb-5">
+    <h3 className="text-md font-bold text-gray-800 flex items-center gap-3 mb-2">{icon}{title}</h3>
+    <p className="text-gray-600 leading-relaxed text-justify">
+      {content.split('\n').map((line, index) => (
+        <React.Fragment key={index}>
+          {line}
+          {index < content.split('\n').length - 1 && <br />}
+        </React.Fragment>
+      ))}
+    </p>
+  </div>
+);
+
+const ListParagraph = ({ icon, title, items }) => (
+  <div className="mb-5">
+    <h3 className="text-md font-bold text-gray-800 flex items-center gap-3 mb-2">{icon}{title}</h3>
+    <ul className="list-disc list-inside space-y-2 text-gray-600 text-justify">
+      {items.map((item, index) => (
+        <li key={index}>
+          {item.split('\n').map((line, lineIndex) => (
+            <React.Fragment key={lineIndex}>
+              {line}
+              {lineIndex < item.split('\n').length - 1 && <br />}
+            </React.Fragment>
+          ))}
+        </li>
+      ))}
+    </ul>
+  </div>
+);
 
 const StudyGuideModal = ({ guide, onClose }) => {
   if (!guide) return null;
@@ -12,13 +44,11 @@ const StudyGuideModal = ({ guide, onClose }) => {
     let y = 40; // Posición Y inicial más abajo para dar espacio al header
 
     const addHeader = () => {
-      // Se establece la altura y se deja que el ancho se calcule automáticamente para mantener la proporción.
       doc.addImage(logo, 'GIF', 14, 10, 0, 15);
-      // Usamos el color azul principal de la aplicación (Tailwind's blue-600)
       doc.setDrawColor(37, 99, 235); 
       doc.setLineWidth(0.5);
       doc.line(14, 28, doc.internal.pageSize.getWidth() - 14, 28);
-      doc.setLineWidth(0.2); // Reseteamos el grosor para el resto del documento
+      doc.setLineWidth(0.2);
     };
 
     const addFooter = (pageNumber, totalPages) => {
@@ -28,10 +58,8 @@ const StudyGuideModal = ({ guide, onClose }) => {
       doc.text(pageStr, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
     };
 
-    // Añadir header en la primera página
     addHeader();
 
-    // Función para añadir una sección con título y contenido
     const addSection = (title, content, isList = false) => {
       if (!content || content.length === 0) return;
 
@@ -39,18 +67,16 @@ const StudyGuideModal = ({ guide, onClose }) => {
         ? content.reduce((acc, item) => acc + (doc.splitTextToSize(item, 170).length * 5) + 2, 0)
         : (doc.splitTextToSize(content, 180).length * 5);
 
-      // Salto de página si no hay espacio (considerando el footer)
       if (y + contentHeight > doc.internal.pageSize.getHeight() - 20) {
         doc.addPage();
-        addHeader(); // Añadir header en la nueva página
-        y = 40; // Resetear Y
+        addHeader();
+        y = 40;
       }
 
-      // Título del documento (solo en la primera página, después del header)
       if (title === "Título Principal") {
         doc.setFontSize(16);
         doc.setFont(undefined, 'bold');
-        doc.setTextColor(0, 0, 0); // Aseguramos que el color del título sea negro
+        doc.setTextColor(0, 0, 0);
         doc.text(content, doc.internal.pageSize.getWidth() / 2, y, { align: 'center' });
         y += 8;
         return;
@@ -74,48 +100,47 @@ const StudyGuideModal = ({ guide, onClose }) => {
         doc.text(splitContent, 14, y);
         y += (splitContent.length * 5);
       }
-      y += 8; // Espacio después de la sección
+      y += 8;
     };
 
-    // Añadir secciones al PDF
     addSection("Título Principal", guide.title);
     addSection("Introducción", guide.introduction);
+    // --- NUEVO: AÑADIR PROGRAMA SINTÉTICO AL PDF ---
+    if (guide.syllabus && guide.syllabus.length > 0) {
+      addSection("Programa Sintético", guide.syllabus, true);
+    }
     addSection("Conceptos Clave", guide.coreConcepts);
     addSection("Temas Complementarios", guide.complementaryTopics);
     addSection("Enfoque en Habilidades", guide.skillsFocus);
     addSection("Ejemplos de Preguntas", guide.exampleQuestions.map(q => `"${q}"`), true);
     addSection("Sugerencias Finales", guide.studyTips);
 
-    // Añadir footer en todas las páginas
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       addFooter(i, pageCount);
     }
 
-    // Guardar el PDF
     const examTitle = guide.title.replace('Guía de Estudio para: ', '').trim();
     const safeFileName = `Guia de estudio ~ ${examTitle.replace(/[^a-z0-9\s]/gi, '')}.pdf`;
     doc.save(safeFileName);
   };
 
-  const Paragraph = ({ icon, title, content }) => (
-    <div className="mb-5">
-      <h3 className="text-md font-bold text-gray-800 flex items-center gap-3 mb-2">{icon}{title}</h3>
-      <p className="text-gray-600 leading-relaxed">{content}</p>
-    </div>
-  );
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <header className="p-4 border-b flex justify-between items-center sticky top-0 bg-white rounded-t-xl">
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FileText size={20} /> Programa sintetico</h2>
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FileText size={20} /> Programa Sintético</h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200"><X size={20} /></button>
         </header>
         <main className="p-8 overflow-y-auto">
           <Paragraph icon={<Star className="text-yellow-500" size={18}/>} title="Introducción" content={guide.introduction} />
           
+          {/* --- NUEVO: MOSTRAR EL PROGRAMA SINTÉTICO --- */}
+          {guide.syllabus && guide.syllabus.length > 0 && (
+            <ListParagraph icon={<ListChecks className="text-indigo-500" size={18}/>} title="Programa Sintético" items={guide.syllabus} />
+          )}
+
           {guide.coreConcepts && <Paragraph icon={<BrainCircuit className="text-blue-500" size={18}/>} title="Conceptos Clave" content={guide.coreConcepts} />}
           
           {guide.complementaryTopics && <Paragraph icon={<BrainCircuit className="text-blue-500" size={18}/>} title="Temas Complementarios" content={guide.complementaryTopics} />}

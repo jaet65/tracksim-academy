@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, getDocs, doc, getDoc, deleteDoc, orderBy, query, where, updateDoc, onSnapshot } from 'firebase/firestore';
+import * as XLSX from 'xlsx';
 
 
 import { generateStudyGuide } from '../utils/studyGuideGenerator'; // <-- NUEVO
@@ -32,7 +33,9 @@ const AdminDashboard = () => {
   const [examTitle, setExamTitle] = useState(''); // Estado para el nombre del examen
   const [examDuration, setExamDuration] = useState(45); // <-- NUEVO: Estado para la duración
   const [exams, setExams] = useState([]);
-  const [guideFile, setGuideFile] = useState(null); // <-- NUEVO: Para el archivo de la guía
+  const [supplementaryGuideFile, setSupplementaryGuideFile] = useState(null);
+  const [descriptionFile, setDescriptionFile] = useState(null);
+  const [questionsFile, setQuestionsFile] = useState(null);
   const [loadingExams, setLoadingExams] = useState(true);
   const [chartData, setChartData] = useState(null);
   const [allResults, setAllResults] = useState([]);
@@ -289,105 +292,149 @@ await updateDoc(doc(db, 'users', request.uid), { instructorRequestStatus: 'appro
       throw error; // Propaga el error para que sea manejado por la función que llama
     }
   };
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // 1. VALIDACIÓN: Obligar a poner nombre
-    if (!examTitle.trim()) {
-      alert("⚠️ Por favor, escribe un NOMBRE para el examen antes de seleccionar el archivo.");
-      e.target.value = null; // Reseteamos el input del archivo
+  const handleCreateExam = async () => {
+    if (!examTitle.trim() || !questionsFile) {
+      alert("⚠️ Por favor, escribe un NOMBRE para el examen y selecciona el archivo de preguntas (CSV).");
       return;
     }
 
     setLoading(true);
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      encoding: "ISO-8859-1",
-      complete: async (results) => {
-        try {
-          let guideData = { url: '', token: '' };
-          // --- NUEVO: Subir la guía a Cloudinary si existe ---
-          if (guideFile) {
-            try {
-              const { secure_url, delete_token } = await uploadToCloudinary(guideFile);
-              guideData = { url: secure_url, token: delete_token };
-            } catch (uploadError) {
-              alert("Hubo un error al subir la guía complementaria. El examen no fue creado.");
-              throw uploadError; // Detiene la ejecución
-            }
-          }
-          const questions = results.data.map((row, index) => {
-            let options;
-            let questionType = 'MC'; // Multiple Choice por defecto
+    try {
+      // 1. Parse Questions from CSV
+      const questions = await new Promise((resolve, reject) => {
+        Papa.parse(questionsFile, {
+          header: true,
+          skipEmptyLines: true,
+          encoding: "ISO-8859-1",
+          complete: (results) => {
+            const parsedQuestions = results.data.map((row, index) => {
+              let options;
+              let questionType = 'MC';
 
-            if (isTrueFalse(row)) {
-              questionType = 'TF'; // True/False
-              options = ['Verdadero', 'Falso'];
-            } else {
-              options = [row['Opcion A'], row['Opcion B'], row['Opcion C']];
-              if (row['Opcion D'] && row['Opcion D'].trim() !== '') {
-                options.push(row['Opcion D']);
+              if (isTrueFalse(row)) {
+                questionType = 'TF';
+                options = ['Verdadero', 'Falso'];
+              } else {
+                options = [row['Opcion A'], row['Opcion B'], row['Opcion C']];
+                if (row['Opcion D'] && row['Opcion D'].trim() !== '') {
+                  options.push(row['Opcion D']);
+                }
+                options = options.filter(opt => opt && opt.trim() !== '');
               }
-              // Filtramos opciones vacías en caso de que sea una pregunta con menos de 4 opciones
-              options = options.filter(opt => opt && opt.trim() !== '');
+
+              return {
+                id: index + 1,
+                text: row['Pregunta'],
+                type: questionType,
+                options: options,
+                correctOption: getCorrectIndex(row['Respuesta'])
+              };
+            }).filter(q => q.text);
+
+            if (parsedQuestions.length === 0) {
+              reject(new Error("El archivo de preguntas está vacío o las columnas no coinciden."));
+            } else {
+              resolve(parsedQuestions);
             }
+          },
+          error: (error) => reject(new Error(`Error al leer el CSV: ${error.message}`))
+        });
+      });
 
-            return {
-              id: index + 1,
-              text: row['Pregunta'],
-              type: questionType,
-              options: options,
-              correctOption: getCorrectIndex(row['Respuesta'])
-            };
-          }).filter(q => q.text);
+      // 2. Parse Description and Syllabus from XLSX (if provided)
+      let description = '';
+      let syllabus = [];
+      if (descriptionFile) {
+        const data = await descriptionFile.arrayBuffer();
+        const workbook = XLSX.read(data);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        const desc1 = worksheet['A4'] ? worksheet['A4'].v : '';
+        const desc2 = worksheet['A5'] ? worksheet['A5'].v : '';
+        let fullDescription = `${desc1} ${desc2}`.trim();
 
-          if (questions.length === 0) {
-            alert("El archivo está vacío o las columnas no coinciden.");
-            setLoading(false);
-            return;
-          }
-
-          // Generar la guía de estudio
-          const studyGuide = generateStudyGuide(questions, examTitle.trim());
-
-          // 2. USAR EL NOMBRE PERSONALIZADO
-          const examData = {
-            title: examTitle.trim(), // <--- Aquí usamos lo que escribiste
-            duration: Number(examDuration), // <-- NUEVO: Guardamos la duración en minutos
-            createdAt: new Date(),
-            totalQuestions: questions.length,
-            studyGuide: studyGuide, // <-- NUEVO: Guardamos la guía generada
-            supplementaryGuideUrl: guideData.url, // <-- MODIFICADO: Usamos la URL de Cloudinary
-            supplementaryGuideDeleteToken: guideData.token || "", // <-- CORRECCIÓN: Aseguramos que no sea undefined
-            questions: questions
-          };
-
-          await addDoc(collection(db, "exams"), examData);
-          
-          alert(`¡Éxito! Se creó el examen "${examTitle}" con ${questions.length} preguntas.`);
-          
-          // Limpiar formulario
-          setExamTitle('');
-          setExamDuration(45);
-          setGuideFile(null);
-          e.target.value = null;
-          fetchExams(); // Recargar la lista de exámenes
-
-        } catch (error) {
-          console.error("Error subiendo:", error);
-          alert("Hubo un error al guardar en la base de datos.");
-        } finally {
-          setLoading(false);
+        // Remove "1. Descripción de la evaluación" if it's at the beginning
+        const descriptionPrefix = "1. Descripción de la evaluación";
+        if (fullDescription.toLowerCase().startsWith(descriptionPrefix.toLowerCase())) {
+            fullDescription = fullDescription.substring(descriptionPrefix.length).trim();
+            // Remove any leading colon or hyphen if present after the title removal
+            if (fullDescription.startsWith(':') || fullDescription.startsWith('-')) {
+                fullDescription = fullDescription.substring(1).trim();
+            }
         }
-      },
-      error: (error) => {
-        console.error("Error CSV:", error);
-        setLoading(false);
+        description = fullDescription;
+
+        let row = 25;
+        const rawSyllabusItems = [];
+        while (worksheet[`A${row}`]) {
+          rawSyllabusItems.push(worksheet[`A${row}`].v);
+          row++;
+        }
+
+        const syllabusPrefix = "2. Programa sintético";
+        syllabus = rawSyllabusItems.map(item => {
+            let processedItem = item.trim();
+            if (processedItem.toLowerCase().startsWith(syllabusPrefix.toLowerCase())) {
+                processedItem = processedItem.substring(syllabusPrefix.length).trim();
+                // Remove any leading colon or hyphen if present
+                if (processedItem.startsWith(':') || processedItem.startsWith('-')) {
+                    processedItem = processedItem.substring(1).trim();
+                }
+            }
+            return processedItem;
+        }).filter(item => item !== '' && item.toLowerCase() !== syllabusPrefix.toLowerCase()); // Filter out empty strings or just the title
       }
-    });
+
+      // 3. Upload Supplementary Guide to Cloudinary (if provided)
+      let guideData = { url: '', token: '' };
+      if (supplementaryGuideFile) {
+        try {
+          const { secure_url, delete_token } = await uploadToCloudinary(supplementaryGuideFile);
+          guideData = { url: secure_url, token: delete_token };
+        } catch (uploadError) {
+          alert("Hubo un error al subir la guía complementaria. El examen no fue creado.");
+          throw uploadError;
+        }
+      }
+      
+      // 4. Generate Study Guide
+      const studyGuide = generateStudyGuide(questions, examTitle.trim());
+
+      // 5. Prepare Exam Data
+      const examData = {
+        title: examTitle.trim(),
+        duration: Number(examDuration),
+        createdAt: new Date(),
+        totalQuestions: questions.length,
+        studyGuide: studyGuide,
+        supplementaryGuideUrl: guideData.url,
+        supplementaryGuideDeleteToken: guideData.token || "",
+        questions: questions,
+        description: description,
+        syllabus: syllabus,
+      };
+
+      // 6. Save to Firestore
+      await addDoc(collection(db, "exams"), examData);
+      
+      alert(`¡Éxito! Se creó el examen "${examTitle}" con ${questions.length} preguntas.`);
+      
+      // 7. Reset Form
+      setExamTitle('');
+      setExamDuration(45);
+      setSupplementaryGuideFile(null);
+      setDescriptionFile(null);
+      setQuestionsFile(null);
+      fetchExams();
+
+    } catch (error) {
+      console.error("Error creando el examen:", error);
+      alert(`Hubo un error al crear el examen: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteExam = async (exam) => {
@@ -631,10 +678,10 @@ await updateDoc(doc(db, 'users', request.uid), { instructorRequestStatus: 'appro
           
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Cargar Nuevo Examen</h2>
           <p className="text-gray-500 mb-8 max-w-lg mx-auto">
-            Sube tu archivo Excel (CSV) con las preguntas. Asegúrate de ponerle un nombre claro para que los alumnos lo identifiquen.
+            Completa los datos y sube los archivos necesarios para crear un nuevo examen.
           </p>
 
-          {/* NUEVO: Input para el Título */}
+          {/* Input para el Título */}
           <div className="max-w-md mx-auto mb-8 text-left grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
               <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
@@ -668,62 +715,89 @@ await updateDoc(doc(db, 'users', request.uid), { instructorRequestStatus: 'appro
             </div>
           </div>
 
-          {/* NUEVO: Input para el hipervínculo de la guía */}
-          <div className="max-w-md mx-auto mb-8 text-left">
-            <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
-              Guía Complementaria (PDF, Opcional)
-            </label>
-            <div className="relative">
-              <Paperclip className="absolute top-2 left-1 text-gray-400 w-3" />
+          {/* File Inputs */}
+          <div className="max-w-md mx-auto mb-8 space-y-6 text-left">
+            {/* Input para Guía Complementaria */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
+                1. Guía Complementaria (PDF, Opcional)
+              </label>
               <input
                 type="file"
                 accept="application/pdf,image/*"
-                onChange={(e) => setGuideFile(e.target.files[0])}
+                onChange={(e) => setSupplementaryGuideFile(e.target.files[0])}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               />
+              {supplementaryGuideFile && (
+                <div className="mt-2 text-xs text-gray-500 flex justify-between items-center">
+                  <span>{supplementaryGuideFile.name}</span>
+                  <button onClick={() => setSupplementaryGuideFile(null)} className="text-red-500 hover:underline">Quitar</button>
+                </div>
+              )}
             </div>
-            {guideFile && (
-              <div className="mt-2 text-xs text-gray-500 flex justify-between items-center">
-                <span>Seleccionado: <span className="font-medium text-gray-700">{guideFile.name}</span></span>
-                <button onClick={() => setGuideFile(null)} className="text-red-500 hover:underline">Quitar</button>
-              </div>
-            )}
+
+            {/* Input para Descripción XLSX */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
+                2. Descripción y Programa (XLSX, Opcional)
+              </label>
+              <input
+                type="file"
+                accept=".xlsx"
+                onChange={(e) => setDescriptionFile(e.target.files[0])}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+              />
+              {descriptionFile && (
+                <div className="mt-2 text-xs text-gray-500 flex justify-between items-center">
+                  <span>{descriptionFile.name}</span>
+                  <button onClick={() => setDescriptionFile(null)} className="text-red-500 hover:underline">Quitar</button>
+                </div>
+              )}
+            </div>
+            
+            {/* Input para Preguntas CSV */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
+                3. Preguntas del Examen (CSV, Requerido)
+              </label>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setQuestionsFile(e.target.files[0])}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"
+              />
+              {questionsFile && (
+                <div className="mt-2 text-xs text-gray-500 flex justify-between items-center">
+                  <span>{questionsFile.name}</span>
+                  <button onClick={() => setQuestionsFile(null)} className="text-red-500 hover:underline">Quitar</button>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Área de carga de archivo */}
-          <label className={`
-            block w-full max-w-md mx-auto border-2 border-dashed rounded-lg p-2 cursor-pointer transition-all
-            ${loading ? 'bg-gray-50 border-gray-300' : 'border-blue-300 hover:bg-blue-50 hover:border-blue-500'}
-            ${!examTitle.trim() && !loading ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''} 
-          `}>
-            <input 
-              type="file" 
-              accept=".csv" 
-              onChange={handleFileUpload} 
-              disabled={loading || !examTitle.trim()} // Deshabilitado si no hay título
-              className="hidden" 
-            />
-            
+          {/* Botón para Crear Examen */}
+          <button
+            onClick={handleCreateExam}
+            disabled={loading || !examTitle.trim() || !questionsFile}
+            className="w-full max-w-md mx-auto bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
             {loading ? (
-              <span className="text-blue-600 font-bold animate-pulse flex flex-col items-center gap-2">
-                <Upload className="animate-bounce" /> Procesando preguntas...
-              </span>
+              <>
+                <Loader className="animate-spin" />
+                <span>Creando Examen...</span>
+              </>
             ) : (
-              <div className="flex flex-col items-center">
-                <FileText className={`mb-2 w-8 h-8 ${!examTitle.trim() ? 'text-gray-300' : 'text-blue-500'}`} />
-                <span className={`font-medium ${!examTitle.trim() ? 'text-gray-400' : 'text-blue-600'}`}>
-                  {!examTitle.trim() ? 'Primero escribe un nombre arriba ☝️' : 'Haz clic para seleccionar el CSV'}
-                </span>
-              </div>
+              <>
+                <CheckCircle />
+                Crear Examen
+              </>
             )}
-          </label>
+          </button>
 
           <div className="mt-8 text-xs text-gray-400">
-            Columnas requeridas en Excel: <br/>
-            <span className="font-mono bg-gray-100 px-1 rounded">Pregunta, Opcion A, Opcion B, Opcion C, Opcion D, (A/B/C/D)</span><br/>
-            <span className="font-mono bg-gray-100 px-1 rounded">Pregunta Verdadero/Falso, [], [], [], [], (Verdadero/Falso)</span>
+            Columnas requeridas en el CSV: 
+            <span className="font-mono bg-gray-100 px-1 rounded">Pregunta, Opcion A, Opcion B, Opcion C, Opcion D, Respuesta</span>
           </div>
-
         </div>
 
         {/* Lista de Exámenes Existentes */}

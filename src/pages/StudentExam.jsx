@@ -228,9 +228,18 @@ const StudentExam = () => {
   const handleShowGuide = () => {
     if (!exam) return;
     if (exam.studyGuide) {
-      setStudyGuideContent({ ...exam.studyGuide, supplementaryGuideUrl: exam.supplementaryGuideUrl });
+      setStudyGuideContent({ 
+        ...exam.studyGuide, 
+        supplementaryGuideUrl: exam.supplementaryGuideUrl,
+        syllabus: exam.syllabus // <-- AÑADIR EL PROGRAMA SINTÉTICO
+      });
     } else if (!studyGuideContent) {
-      setStudyGuideContent(generateStudyGuide(exam.questions, exam.title || 'Examen'));
+      // Si no hay guía de estudio, generamos una y también pasamos el syllabus si existe
+      const generatedGuide = generateStudyGuide(exam.questions, exam.title || 'Examen');
+      setStudyGuideContent({
+        ...generatedGuide,
+        syllabus: exam.syllabus
+      });
     }
     setShowStudyGuide(true);
   };
