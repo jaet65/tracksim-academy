@@ -537,6 +537,68 @@ await updateDoc(doc(db, 'users', request.uid), { instructorRequestStatus: 'appro
     fileInput.click();
   };
 
+  const handleUpdateDescriptionFile = async (examId) => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.xlsx';
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      setLoading(true);
+      try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+
+        const desc1 = worksheet['A4'] ? worksheet['A4'].v : '';
+        const desc2 = worksheet['A5'] ? worksheet['A5'].v : '';
+        let fullDescription = `${desc1} ${desc2}`.trim();
+        const descriptionPrefix = "1. Descripción de la evaluación";
+        if (fullDescription.toLowerCase().startsWith(descriptionPrefix.toLowerCase())) {
+          fullDescription = fullDescription.substring(descriptionPrefix.length).trim();
+          if (fullDescription.startsWith(':') || fullDescription.startsWith('-')) {
+            fullDescription = fullDescription.substring(1).trim();
+          }
+        }
+
+        let row = 25;
+        const rawSyllabusItems = [];
+        while (worksheet[`A${row}`]) {
+          rawSyllabusItems.push(worksheet[`A${row}`].v);
+          row++;
+        }
+        const syllabusPrefix = "2. Programa sintético";
+        const syllabus = rawSyllabusItems.map(item => {
+          let processedItem = item.trim();
+          if (processedItem.toLowerCase().startsWith(syllabusPrefix.toLowerCase())) {
+            processedItem = processedItem.substring(syllabusPrefix.length).trim();
+            if (processedItem.startsWith(':') || processedItem.startsWith('-')) {
+              processedItem = processedItem.substring(1).trim();
+            }
+          }
+          return processedItem;
+        }).filter(item => item !== '' && item.toLowerCase() !== syllabusPrefix.toLowerCase());
+
+        const examRef = doc(db, "exams", examId);
+        await updateDoc(examRef, {
+          description: fullDescription,
+          syllabus: syllabus
+        });
+
+        alert("La descripción del examen ha sido actualizada con éxito.");
+        setEditingExamId(null);
+      } catch (error) {
+        console.error("Error actualizando la descripción:", error);
+        alert("Hubo un error al actualizar la descripción del examen.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fileInput.click();
+  };
+
   const handleDeleteGuideLink = async (exam) => {
     const { id: examId, supplementaryGuideDeleteToken } = exam;
     if (window.confirm("¿Estás seguro de que quieres eliminar la guía complementaria de este examen?")) {
@@ -881,7 +943,19 @@ await updateDoc(doc(db, 'users', request.uid), { instructorRequestStatus: 'appro
                         )}
                       </div>
 
-                      {/* 3. Eliminar examen */}
+                      {/* 3. Descripción y Programa */}
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-medium text-gray-700">Descripción:</label>
+                        <button
+                          onClick={() => handleUpdateDescriptionFile(exam.id)}
+                          className="flex items-center gap-2 text-sm text-teal-600 hover:text-teal-800"
+                          title="Subir o reemplazar descripción"
+                        >
+                          <Upload size={16} /> Reemplazar
+                        </button>
+                      </div>
+
+                      {/* 4. Eliminar examen */}
                       <div className="pt-4 border-t border-gray-200">
                         <button
                           onClick={() => handleDeleteExam(exam)}
