@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
 import { 
@@ -30,20 +30,8 @@ const Login = () => {
   const [checkingAuth, setCheckingAuth] = useState(true); // Spinner inicial de carga
   const navigate = useNavigate();
 
-  // 1. ESCUCHA DE AUTENTICACIÓN (Solo para persistencia si recargas)
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCheckingAuth(false); // Firebase ya respondió (sea usuario o null)
-      if (user) {
-        console.log("Sesión detectada:", user.email);
-        await handleRedirectLogic(user);
-      }
-    });
-    return () => unsubscribe();
-  }, [navigate]);
-
-  // 2. LÓGICA DE DIRECCIONAMIENTO
-  const handleRedirectLogic = async (user) => {
+  // 1. LÓGICA DE DIRECCIONAMIENTO
+  const handleRedirectLogic = useCallback(async (user) => {
     // --- RESTAURADO: Verificación de correo electrónico ---
     // Si el usuario se registró con email/contraseña y no ha verificado su correo, no lo dejamos pasar.
     const isEmailPasswordUser = user.providerData.some(provider => provider.providerId === 'password');
@@ -91,7 +79,19 @@ const Login = () => {
       console.error(err);
       setError("Error leyendo perfil.");
     }
-  };
+  }, [navigate, isRegistering]);
+
+  // 2. ESCUCHA DE AUTENTICACIÓN (Solo para persistencia si recargas)
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCheckingAuth(false); // Firebase ya respondió (sea usuario o null)
+      if (user) {
+        console.log("Sesión detectada:", user.email);
+        await handleRedirectLogic(user);
+      }
+    });
+    return () => unsubscribe();
+  }, [handleRedirectLogic]);
 
   // 3. LOGIN CON GOOGLE (POPUP)
   const handleGoogleLogin = async () => {

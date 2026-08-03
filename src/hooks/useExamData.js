@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, collection, query, where, getDocs, deleteDoc, limit } from 'firebase/firestore';
-import { db, auth } from '../firebase-config';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase-config';
 
 const shuffleArrayWithMap = (array) => {
   const shuffledArray = [...array];

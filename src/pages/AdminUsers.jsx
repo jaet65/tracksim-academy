@@ -239,7 +239,7 @@ const RetakeApprovalModal = ({ user, onClose }) => {
       }
     };
     fetchUserData();
-  }, [user.id]);
+  }, [user.id, user.fullName]);
 
   // --- CORRECCIÓN: Función para refrescar el estado de los pases ---
   const refreshPendingApprovals = async () => {

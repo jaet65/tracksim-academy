@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
-import { doc, getDoc, collection, getDocs, query, where, limit, deleteDoc, addDoc, serverTimestamp, updateDoc, onSnapshot, deleteField } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, limit, deleteDoc, addDoc, serverTimestamp, updateDoc, deleteField } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { BookOpen, ArrowRight, LogOut, Loader, ChevronDown, User, ShieldAlert, Award } from 'lucide-react';
 import logo from '../assets/Logo.gif'; // Importamos el logo
@@ -35,7 +35,7 @@ const StudentEntry = () => {
       setRequestMessage('Error al enviar la solicitud. Inténtalo de nuevo.');
     }
   };
-  const initData = async (user) => {
+  const initData = useCallback(async (user) => {
     try {
       // 1. Cargar Datos del Alumno
       const userDoc = await getDoc(doc(db, "users", user.uid));
@@ -70,7 +70,7 @@ const StudentEntry = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -81,7 +81,7 @@ const StudentEntry = () => {
       }
     });
     return () => unsubscribe();
-  }, [navigate]);
+  }, [navigate, initData]);
 
   // Efecto para verificar si el examen puede ser tomado
   useEffect(() => {

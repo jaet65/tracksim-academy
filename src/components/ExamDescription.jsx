@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // <-- CORRECCIÓN: Mantener useEffect
+import React, { useMemo } from 'react';
 import { BookText, ArrowRight, Clock, CheckCircle, Download, X } from 'lucide-react';
 import { useButtonCountdown } from '../hooks/useButtonCountdown';
 
@@ -87,27 +87,28 @@ const generateExamSummary = (questions) => {
 };
 
 const ExamDescription = ({ exam, onAccept, onCancel, onShowGuide }) => {
-  const [summary, setSummary] = useState({ title: "Descripción de la Evaluación", description: "Cargando análisis del contenido..." });
   const { countdown, isButtonDisabled, showCheckAnimation } = useButtonCountdown(3);
   
-  useEffect(() => {
-    if (exam) {
-      // 1. Prioridad: Usar la descripción del XLSX si existe.
-      if (exam.description) {
-        setSummary({
-          title: "Descripción de la Evaluación", // Título genérico
-          description: exam.description
-        });
-      } else if (exam.descriptionTitle && exam.descriptionBody) { // 2. Compatibilidad con el formato anterior
-        setSummary({
-          title: exam.descriptionTitle,
-          description: exam.descriptionBody
-        });
-      } else if (exam.questions) { // 3. Fallback: Generarla si no existe nada.
-        const [title, description] = generateExamSummary(exam.questions);
-        setSummary({ title, description });
-      }
+  const summary = useMemo(() => {
+    if (!exam) {
+      return { title: "Descripción de la Evaluación", description: "Cargando análisis del contenido..." };
     }
+    // 1. Prioridad: Usar la descripción del XLSX si existe.
+    if (exam.description) {
+      return {
+        title: "Descripción de la Evaluación", // Título genérico
+        description: exam.description
+      };
+    } else if (exam.descriptionTitle && exam.descriptionBody) { // 2. Compatibilidad con el formato anterior
+      return {
+        title: exam.descriptionTitle,
+        description: exam.descriptionBody
+      };
+    } else if (exam.questions) { // 3. Fallback: Generarla si no existe nada.
+      const [title, description] = generateExamSummary(exam.questions);
+      return { title, description };
+    }
+    return { title: "Descripción de la Evaluación", description: "Cargando análisis del contenido..." };
   }, [exam]);
 
   return (

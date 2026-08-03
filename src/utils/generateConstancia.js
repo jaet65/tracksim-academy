@@ -171,7 +171,7 @@ export const generateConstancia = async (studentData, examData, score, simulator
     yPosition += 15;
     doc.setFontSize(9);
 
-    incorrectAnswers.forEach((item, index) => {
+    incorrectAnswers.forEach((item) => {
       // Evitar que se salga de la página
       if (yPosition > 270) {
         doc.addPage();

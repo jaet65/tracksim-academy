@@ -2,21 +2,25 @@ import { useState, useEffect } from 'react';
 import { auth } from '../firebase-config';
 
 export const useExamProgress = (exam, examId, isFinished) => {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState({});
   const storageKey = `exam_progress_${auth.currentUser?.uid}_${examId}`;
 
-  // Restaurar progreso
-  useEffect(() => {
-    if (exam) {
-      const savedProgressJSON = localStorage.getItem(storageKey);
-      if (savedProgressJSON) {
-        const savedProgress = JSON.parse(savedProgressJSON);
-        setAnswers(savedProgress.answers || {});
-        setCurrentQuestionIndex(savedProgress.currentQuestionIndex || 0);
-      }
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(() => {
+    const savedProgressJSON = localStorage.getItem(storageKey);
+    if (savedProgressJSON) {
+      const savedProgress = JSON.parse(savedProgressJSON);
+      return savedProgress.currentQuestionIndex || 0;
     }
-  }, [exam, storageKey]);
+    return 0;
+  });
+
+  const [answers, setAnswers] = useState(() => {
+    const savedProgressJSON = localStorage.getItem(storageKey);
+    if (savedProgressJSON) {
+      const savedProgress = JSON.parse(savedProgressJSON);
+      return savedProgress.answers || {};
+    }
+    return {};
+  });
 
   // Guardar progreso
   useEffect(() => {

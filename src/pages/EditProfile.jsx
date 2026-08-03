@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { auth, db } from '../firebase-config';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { User, Briefcase, Fingerprint, Building, Hash, Loader, ArrowLeft } from 'lucide-react';
 
 const EditProfile = () => {
@@ -47,6 +47,7 @@ const EditProfile = () => {
             setTimeout(() => navigate('/completar-perfil'), 2000);
           }
         } catch (err) {
+          console.error(err);
           setError("Error al cargar tus datos.");
         } finally {
           setLoading(false);
@@ -56,7 +57,7 @@ const EditProfile = () => {
       }
     };
     fetchUserData();
-  }, [navigate]);
+  }, [navigate, userId]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -163,6 +164,7 @@ const EditProfile = () => {
       }
 
     } catch (err) {
+      console.error(err);
       setError("No se pudo actualizar tu perfil. Inténtalo de nuevo.");
     } finally {
       setSaving(false);

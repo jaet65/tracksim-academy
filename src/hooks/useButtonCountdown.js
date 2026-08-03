@@ -12,7 +12,9 @@ export const useButtonCountdown = (initialCountdown = 5) => {
       }, 1000);
       return () => clearTimeout(timer);
     } else if (isButtonDisabled) { // Solo ejecutar si el botón aún está deshabilitado
-      setShowCheckAnimation(true);
+      setTimeout(() => {
+        setShowCheckAnimation(true);
+      }, 0);
       const checkTimer = setTimeout(() => {
         setShowCheckAnimation(false);
         setIsButtonDisabled(false);

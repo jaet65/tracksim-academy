@@ -38,7 +38,6 @@ const StudentExam = () => {
   // Estados
   const [finished, setFinished] = useState(false);
   const [score, setScore] = useState(0);
-  const [attempt, setAttempt] = useState(0);
   const [timeUp, setTimeUp] = useState(false);
   const [terminatedForCheating, setTerminatedForCheating] = useState(false);
   const [showConfirmFinishModal, setShowConfirmFinishModal] = useState(false);
@@ -93,6 +92,8 @@ const StudentExam = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen } = useAntiCheat(descriptionAccepted && rulesAccepted && !finished, () => finishExam(true));
+
   // Finalizar Examen
   const finishExam = useCallback(async (isCheating = false) => {
     if (!exam || finished) return;
@@ -130,7 +131,6 @@ const StudentExam = () => {
       const finalScore = Number(((correctCount / exam.questions.length) * 100).toFixed(2));
 
       setScore(finalScore);
-      setAttempt(attemptNumber);
 
       await addDoc(collection(db, "results"), {
         examId: id, examTitle: exam.title,
@@ -149,7 +149,7 @@ const StudentExam = () => {
     } catch (e) {
       console.error("Error guardando resultado", e);
     }
-  }, [exam, finished, answers, id, clearProgress, timeLeft]);
+  }, [exam, finished, answers, id, clearProgress, timeLeft, setShowWarningModal]);
 
   // Callback de tiempo agotado
   onTimeUpCallbackRef.current = () => {
@@ -160,8 +160,6 @@ const StudentExam = () => {
     setTimeout(() => setShowTimeUpNotification(false), 5000);
     finishExam();
   };
-
-  const { showWarningModal, setShowWarningModal, warningCountdown, visibilityWarnings, isFullscreen, requestFullscreen } = useAntiCheat(descriptionAccepted && rulesAccepted && !finished, () => finishExam(true));
 
   // Bloquear navegación
   useBeforeUnload(useCallback((event) => {

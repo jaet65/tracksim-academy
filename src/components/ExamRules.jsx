@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Clock, EyeOff, ArrowRight, Wifi, BookX, UserX, Coffee, AlertTriangle } from 'lucide-react';
 import logo from '../assets/Logo.gif';
 
-const ExamRules = ({ examDurationInSeconds, onAccept, onCancel, onShowGuide, supplementaryGuideUrl }) => {
+const ExamRules = ({ examDurationInSeconds, onAccept, onCancel, supplementaryGuideUrl }) => {
   const [isScrolledToEnd, setIsScrolledToEnd] = useState(false);
 
   // Efecto para el autoscroll suave
@@ -11,7 +11,9 @@ const ExamRules = ({ examDurationInSeconds, onAccept, onCancel, onShowGuide, sup
 
     // Si el contenido no necesita scroll, habilita el botón directamente
     if (scrollableElement.scrollHeight <= window.innerHeight) {
-      setIsScrolledToEnd(true);
+      setTimeout(() => {
+        setIsScrolledToEnd(true);
+      }, 0);
       return;
     }
 

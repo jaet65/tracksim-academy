@@ -4,7 +4,6 @@ import { auth, db } from '../firebase-config';
 import { doc, setDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { User, Briefcase, Fingerprint, Building, Hash, Loader, X } from 'lucide-react';
-import logo from '../assets/Logo.png';
 
 const CompleteProfile = () => {
   const [formData, setFormData] = useState({

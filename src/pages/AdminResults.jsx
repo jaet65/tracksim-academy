@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db, auth } from '../firebase-config';
-import { collection, getDocs, orderBy, query, doc, getDoc, deleteDoc, addDoc, writeBatch, where, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, doc, getDoc, deleteDoc, addDoc, writeBatch, where, updateDoc, deleteField } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { LogOut, ArrowLeft, Search, Download, FileText, Printer, Trash2, Repeat, Upload, Loader, Users, RefreshCcw } from 'lucide-react';
 import { formatTime } from '../utils/timeUtils'; // Import utility formatTime
@@ -37,7 +37,7 @@ const AdminResults = () => {
   }, [location.search]);
 
   // 1. Cargar resultados desde Firebase
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     try {
       const user = auth.currentUser;
@@ -87,12 +87,12 @@ const AdminResults = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
 
   useEffect(() => {
     fetchAllData();
-  }, []);
+  }, [fetchAllData]);
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/home');
